@@ -1,0 +1,10 @@
+<library path="rviz_2d_plot_plugin">
+  <class
+    name="rviz_2d_plot_plugin/Plot2D"
+    type="rviz_2d_plot_plugin::Plot2DDisplay"
+    base_class_type="rviz_common::Display">
+    <description>
+      Plot ROS 2 topic fields as a compact 2D overlay inside RViz.
+    </description>
+  </class>
+</library>
