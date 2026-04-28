@@ -62,7 +62,14 @@ ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME})
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
+
+  ament_add_gtest(test_plugin_assets test/test_plugin_assets.cpp)
+  target_compile_definitions(test_plugin_assets PRIVATE
+    PROJECT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+
   ament_lint_auto_find_test_dependencies()
 endif()
 

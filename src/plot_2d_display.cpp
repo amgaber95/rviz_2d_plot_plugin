@@ -1,3 +1,9 @@
+// Copyright 2026 Abdelrahman Mahmoud
+//
+// Use of this source code is governed by an MIT-style
+// license that can be found in the LICENSE file or at
+// https://opensource.org/licenses/MIT.
+
 #include "rviz_2d_plot_plugin/plot_2d_display.hpp"
 
 #include <pluginlib/class_list_macros.hpp>
