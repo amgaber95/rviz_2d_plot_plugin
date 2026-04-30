@@ -17,11 +17,13 @@ find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
 add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/plot_2d_config.hpp
   include/rviz_2d_plot_plugin/plot_2d_display.hpp
+  include/rviz_2d_plot_plugin/plot_path_resolver.hpp
   include/rviz_2d_plot_plugin/plot_range.hpp
   include/rviz_2d_plot_plugin/sample_buffer.hpp
   include/rviz_2d_plot_plugin/tick_generator.hpp
   src/plot_2d_config.cpp
   src/plot_2d_display.cpp
+  src/plot_path_resolver.cpp
   src/plot_range.cpp
   src/sample_buffer.cpp
   src/tick_generator.cpp
@@ -80,6 +82,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_plot_2d_config test/test_plot_2d_config.cpp)
   target_link_libraries(test_plot_2d_config ${PROJECT_NAME})
+
+  ament_add_gtest(test_plot_path_resolver test/test_plot_path_resolver.cpp)
+  target_link_libraries(test_plot_path_resolver ${PROJECT_NAME})
 
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
   target_link_libraries(test_plot_range ${PROJECT_NAME})
