@@ -19,10 +19,12 @@ add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/plot_2d_display.hpp
   include/rviz_2d_plot_plugin/plot_range.hpp
   include/rviz_2d_plot_plugin/sample_buffer.hpp
+  include/rviz_2d_plot_plugin/tick_generator.hpp
   src/plot_2d_config.cpp
   src/plot_2d_display.cpp
   src/plot_range.cpp
   src/sample_buffer.cpp
+  src/tick_generator.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -84,6 +86,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_sample_buffer test/test_sample_buffer.cpp)
   target_link_libraries(test_sample_buffer ${PROJECT_NAME})
+
+  ament_add_gtest(test_tick_generator test/test_tick_generator.cpp)
+  target_link_libraries(test_tick_generator ${PROJECT_NAME})
 
   ament_lint_auto_find_test_dependencies()
 endif()
