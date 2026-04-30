@@ -11,6 +11,9 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rosidl_typesupport_cpp REQUIRED)
+find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
 
@@ -21,12 +24,14 @@ add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/plot_range.hpp
   include/rviz_2d_plot_plugin/sample_buffer.hpp
   include/rviz_2d_plot_plugin/tick_generator.hpp
+  include/rviz_2d_plot_plugin/topic_field_introspection.hpp
   src/plot_2d_config.cpp
   src/plot_2d_display.cpp
   src/plot_path_resolver.cpp
   src/plot_range.cpp
   src/sample_buffer.cpp
   src/tick_generator.cpp
+  src/topic_field_introspection.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -40,6 +45,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 ament_target_dependencies(${PROJECT_NAME} PUBLIC
   pluginlib
+  rclcpp
+  rosidl_typesupport_cpp
+  rosidl_typesupport_introspection_cpp
   rviz_common
 )
 
@@ -74,6 +82,8 @@ ament_export_libraries(${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
+  find_package(geometry_msgs REQUIRED)
+  find_package(std_msgs REQUIRED)
 
   ament_add_gtest(test_plugin_assets test/test_plugin_assets.cpp)
   target_compile_definitions(test_plugin_assets PRIVATE
@@ -91,6 +101,10 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_sample_buffer test/test_sample_buffer.cpp)
   target_link_libraries(test_sample_buffer ${PROJECT_NAME})
+
+  ament_add_gtest(test_topic_field_introspection test/test_topic_field_introspection.cpp)
+  target_link_libraries(test_topic_field_introspection ${PROJECT_NAME})
+  ament_target_dependencies(test_topic_field_introspection geometry_msgs std_msgs)
 
   ament_add_gtest(test_tick_generator test/test_tick_generator.cpp)
   target_link_libraries(test_tick_generator ${PROJECT_NAME})
