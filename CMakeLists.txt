@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rcpputils REQUIRED)
 find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
@@ -46,6 +47,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 ament_target_dependencies(${PROJECT_NAME} PUBLIC
   pluginlib
   rclcpp
+  rcpputils
   rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp
   rviz_common
@@ -104,7 +106,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_topic_field_introspection test/test_topic_field_introspection.cpp)
   target_link_libraries(test_topic_field_introspection ${PROJECT_NAME})
-  ament_target_dependencies(test_topic_field_introspection geometry_msgs std_msgs)
+  ament_target_dependencies(test_topic_field_introspection rclcpp geometry_msgs std_msgs)
 
   ament_add_gtest(test_tick_generator test/test_tick_generator.cpp)
   target_link_libraries(test_tick_generator ${PROJECT_NAME})
