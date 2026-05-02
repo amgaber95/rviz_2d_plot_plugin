@@ -16,6 +16,8 @@ find_package(rcpputils REQUIRED)
 find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
+find_package(rviz_2d_overlay_plugins REQUIRED)
+find_package(rviz_2d_overlay_msgs REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
 
 add_library(${PROJECT_NAME} SHARED
@@ -46,6 +48,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
   Qt5::Widgets
+  rviz_2d_overlay_plugins::rviz_2d_overlay_plugins
 )
 
 ament_target_dependencies(${PROJECT_NAME} PUBLIC
@@ -55,6 +58,7 @@ ament_target_dependencies(${PROJECT_NAME} PUBLIC
   rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp
   rviz_common
+  rviz_2d_overlay_msgs
 )
 
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
@@ -108,6 +112,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_plot_2d_display test/test_plot_2d_display.cpp)
   target_link_libraries(test_plot_2d_display ${PROJECT_NAME})
+  ament_target_dependencies(test_plot_2d_display rclcpp std_msgs)
 
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
   target_link_libraries(test_plot_range ${PROJECT_NAME})

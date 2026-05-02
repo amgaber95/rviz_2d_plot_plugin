@@ -11,7 +11,13 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <functional>
+#include <memory>
 #include <vector>
+
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp/serialization.hpp>
+#include <std_msgs/msg/float64.hpp>
 
 #include <rviz_common/properties/bool_property.hpp>
 #include <rviz_common/properties/color_property.hpp>
@@ -22,7 +28,9 @@
 #include <rviz_common/properties/string_property.hpp>
 
 #include "rviz_2d_plot_plugin/plot_2d_config.hpp"
+#include "rviz_2d_plot_plugin/plot_2d_controller.hpp"
 #include "rviz_2d_plot_plugin/plot_2d_display.hpp"
+#include "rviz_2d_plot_plugin/topic_field_introspection.hpp"
 
 namespace rviz_2d_plot_plugin
 {
@@ -64,6 +72,42 @@ public:
   {
     return display.configFromProperties_();
   }
+
+  static void setTopics(Plot2DDisplay & display, TopicTypeMap topics)
+  {
+    display.ros_graph_ops_.get_topic_names_and_types =
+      [topics]() {
+        return topics;
+      };
+  }
+
+  static void setSubscriptionFactory(
+    Plot2DDisplay & display,
+    std::function<rclcpp::GenericSubscription::SharedPtr(
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>)> factory)
+  {
+    display.subscription_factory_.create_generic_subscription = std::move(factory);
+  }
+
+  static void resolveAndSubscribe(Plot2DDisplay & display)
+  {
+    display.resolveAndSubscribe_();
+  }
+
+  static void onSerializedMessage(
+    Plot2DDisplay & display,
+    std::shared_ptr<rclcpp::SerializedMessage> message)
+  {
+    display.onSerializedMessage_(std::move(message));
+  }
+
+  static const Plot2DControllerState & controllerState(Plot2DDisplay & display)
+  {
+    return display.controller_.state();
+  }
 };
 
 }  // namespace rviz_2d_plot_plugin
@@ -73,8 +117,10 @@ namespace
 
 using rviz_2d_plot_plugin::AxisScaleMode;
 using rviz_2d_plot_plugin::Plot2DConfig;
+using rviz_2d_plot_plugin::PlotControllerStatus;
 using rviz_2d_plot_plugin::Plot2DDisplay;
 using rviz_2d_plot_plugin::Plot2DDisplayTestAccessor;
+using rviz_2d_plot_plugin::TopicTypeMap;
 
 void ensureQtApplication()
 {
@@ -119,6 +165,15 @@ std::vector<QString> childNames(rviz_common::properties::Property * parent)
     }
   }
   return names;
+}
+
+template<typename MessageT>
+std::shared_ptr<rclcpp::SerializedMessage> serializeMessage(const MessageT & message)
+{
+  rclcpp::Serialization<MessageT> serializer;
+  auto serialized = std::make_shared<rclcpp::SerializedMessage>();
+  serializer.serialize_message(&message, serialized.get());
+  return serialized;
 }
 
 }  // namespace
@@ -244,4 +299,86 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.layout.height, 180);
   EXPECT_EQ(config.layout.x_offset, 20);
   EXPECT_EQ(config.layout.y_offset, 30);
+}
+
+TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  int created = 0;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&created](
+      const std::string & topic,
+      const std::string & type,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>)
+    {
+      ++created;
+      EXPECT_EQ(topic, "/value");
+      EXPECT_EQ(type, "std_msgs/msg/Float64");
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
+  EXPECT_EQ(created, 1);
+  EXPECT_EQ(state.status, PlotControllerStatus::Ok);
+  EXPECT_EQ(state.topic, "/value");
+  EXPECT_EQ(state.type, "std_msgs/msg/Float64");
+}
+
+TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  std_msgs::msg::Float64 message;
+  message.data = 12.5;
+  Plot2DDisplayTestAccessor::onSerializedMessage(display, serializeMessage(message));
+
+  const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
+  ASSERT_TRUE(state.latest_value.has_value());
+  EXPECT_DOUBLE_EQ(state.latest_value.value(), 12.5);
+  EXPECT_EQ(state.samples.size(), 1U);
+}
+
+TEST(Plot2DDisplay, ClearHistoryPropertyClearsSamplesAndResetsCheckbox)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  std_msgs::msg::Float64 message;
+  message.data = 7.0;
+  Plot2DDisplayTestAccessor::onSerializedMessage(display, serializeMessage(message));
+  ASSERT_EQ(Plot2DDisplayTestAccessor::controllerState(display).samples.size(), 1U);
+
+  Plot2DDisplayTestAccessor::clearHistory(display)->setValue(true);
+
+  const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
+  EXPECT_TRUE(state.samples.empty());
+  EXPECT_FALSE(state.latest_value.has_value());
+  EXPECT_FALSE(Plot2DDisplayTestAccessor::clearHistory(display)->getBool());
 }

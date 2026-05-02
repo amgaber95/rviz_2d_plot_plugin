@@ -7,9 +7,18 @@
 #include "rviz_2d_plot_plugin/plot_2d_display.hpp"
 
 #include <QColor>
+#include <QImage>
+#include <QPainter>
 #include <QVariant>
 
+#include <algorithm>
+#include <cstdint>
+#include <sstream>
+#include <utility>
+
 #include <pluginlib/class_list_macros.hpp>
+#include <rviz_2d_overlay_plugins/overlay_utils.hpp>
+#include <rviz_common/display_context.hpp>
 #include <rviz_common/properties/bool_property.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/editable_enum_property.hpp>
@@ -21,6 +30,43 @@
 
 namespace rviz_2d_plot_plugin
 {
+namespace
+{
+
+rviz_common::properties::StatusProperty::Level statusLevel(
+  const PlotControllerStatus status)
+{
+  using rviz_common::properties::StatusProperty;
+  switch (status) {
+    case PlotControllerStatus::Ok:
+      return StatusProperty::Ok;
+    case PlotControllerStatus::Disabled:
+    case PlotControllerStatus::EmptySelection:
+    case PlotControllerStatus::WaitingForTopic:
+      return StatusProperty::Warn;
+    case PlotControllerStatus::InvalidPath:
+    case PlotControllerStatus::UnsupportedPathSyntax:
+    case PlotControllerStatus::MissingFieldPath:
+    case PlotControllerStatus::AmbiguousTopicType:
+    case PlotControllerStatus::ExtractorError:
+    case PlotControllerStatus::ExtractionError:
+      return StatusProperty::Error;
+  }
+  return StatusProperty::Error;
+}
+
+std::string statusText(const Plot2DControllerState & state)
+{
+  if (!state.message.empty()) {
+    return state.message;
+  }
+  if (state.status == PlotControllerStatus::Ok) {
+    return "OK";
+  }
+  return "Waiting for a topic and field selection";
+}
+
+}  // namespace
 
 Plot2DDisplay::Plot2DDisplay()
 {
@@ -107,19 +153,86 @@ Plot2DDisplay::~Plot2DDisplay() = default;
 void Plot2DDisplay::onInitialize()
 {
   rviz_common::Display::onInitialize();
-  setStatus(
-    rviz_common::properties::StatusProperty::Ok,
-    "Plugin",
-    "2D plot display initialized");
+  auto rviz_node = context_->getRosNodeAbstraction().lock();
+  if (rviz_node) {
+    node_ = rviz_node->get_raw_node();
+  }
+
+  if (node_) {
+    ros_graph_ops_.get_topic_names_and_types = [this]() {
+        return node_->get_topic_names_and_types();
+      };
+    subscription_factory_.create_generic_subscription =
+      [this](
+      const std::string & topic,
+      const std::string & type,
+      rclcpp::QoS qos,
+      SerializedMessageCallback callback)
+      {
+        return node_->create_generic_subscription(
+          topic, type, qos, std::move(callback));
+      };
+  }
+
+  std::ostringstream name;
+  name << "rviz_2d_plot_overlay_"
+       << reinterpret_cast<std::uintptr_t>(this);
+  overlay_ =
+    std::make_shared<rviz_2d_overlay_plugins::OverlayObject>(name.str());
+  overlay_->updateTextureSize(360, 220);
+  overlay_->setDimensions(360, 220);
+  overlay_->hide();
+  resolveAndSubscribe_();
+}
+
+void Plot2DDisplay::onEnable()
+{
+  resolveAndSubscribe_();
+  if (overlay_) {
+    overlay_->show();
+  }
+  renderOverlay_();
+}
+
+void Plot2DDisplay::onDisable()
+{
+  unsubscribe_();
+  if (overlay_) {
+    overlay_->hide();
+  }
+}
+
+void Plot2DDisplay::update(const float wall_dt, const float ros_dt)
+{
+  (void)ros_dt;
+  retry_elapsed_seconds_ += std::max(0.0F, wall_dt);
+  if (retry_elapsed_seconds_ >= 1.0) {
+    retry_elapsed_seconds_ = 0.0;
+    resolveAndSubscribe_();
+  }
+
+  render_elapsed_seconds_ += std::max(0.0F, wall_dt);
+  const double refresh_rate = std::max(1.0F, refresh_rate_property_->getFloat());
+  if (render_elapsed_seconds_ >= 1.0 / refresh_rate) {
+    render_elapsed_seconds_ = 0.0;
+    renderOverlay_();
+  }
 }
 
 void Plot2DDisplay::reset()
 {
   rviz_common::Display::reset();
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    controller_.clearHistory();
+  }
+  renderOverlay_();
 }
 
 void Plot2DDisplay::onConfigPropertyChanged()
 {
+  resolveAndSubscribe_();
+  renderOverlay_();
 }
 
 void Plot2DDisplay::onClearHistoryChanged()
@@ -127,7 +240,12 @@ void Plot2DDisplay::onClearHistoryChanged()
   if (!clear_history_property_ || !clear_history_property_->getBool()) {
     return;
   }
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    controller_.clearHistory();
+  }
   clear_history_property_->setBool(false);
+  renderOverlay_();
 }
 
 Plot2DConfig Plot2DDisplay::configFromProperties_() const
@@ -155,6 +273,163 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.layout.y_offset = y_offset_property_->getInt();
   config.repair();
   return config;
+}
+
+void Plot2DDisplay::resolveAndSubscribe_()
+{
+  const TopicTypeMap topics = ros_graph_ops_.get_topic_names_and_types ?
+    ros_graph_ops_.get_topic_names_and_types() : TopicTypeMap{};
+  const Plot2DConfig config = configFromProperties_();
+
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  controller_.configure(config, topics);
+  subscription_.reset();
+
+  const Plot2DControllerState & state = controller_.state();
+  if (state.status != PlotControllerStatus::Ok) {
+    updateStatusFromController_();
+    return;
+  }
+
+  if (!subscription_factory_.create_generic_subscription) {
+    updateStatusFromController_();
+    return;
+  }
+
+  try {
+    subscription_ = subscription_factory_.create_generic_subscription(
+      state.topic,
+      state.type,
+      qos_profile_,
+      [this](std::shared_ptr<rclcpp::SerializedMessage> message)
+      {
+        onSerializedMessage_(std::move(message));
+      });
+  } catch (const std::exception & exception) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Series 1",
+      QString::fromStdString(exception.what()));
+    return;
+  }
+
+  updateStatusFromController_();
+}
+
+void Plot2DDisplay::onSerializedMessage_(
+  std::shared_ptr<rclcpp::SerializedMessage> message)
+{
+  if (!message) {
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    controller_.appendSerializedMessage(
+      controller_.state().topic, *message, receiveNowSeconds_());
+  }
+  updateStatusFromController_();
+  renderOverlay_();
+  if (context_) {
+    context_->queueRender();
+  }
+}
+
+void Plot2DDisplay::updateStatusFromController_()
+{
+  const Plot2DControllerState & state = controller_.state();
+  setStatus(
+    statusLevel(state.status),
+    "Series 1",
+    QString::fromStdString(statusText(state)));
+}
+
+PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
+{
+  const Plot2DConfig config = configFromProperties_();
+  PlotRenderSettings settings;
+  settings.width = config.layout.width;
+  settings.height = config.layout.height;
+  settings.window_seconds = config.time.window_seconds;
+  settings.now = receiveNowSeconds_();
+  settings.y_scale_mode = config.y_axis.scale_mode;
+  settings.fixed_y_min = config.y_axis.fixed_min;
+  settings.fixed_y_max = config.y_axis.fixed_max;
+  settings.y_padding_fraction = config.y_axis.padding_fraction;
+  settings.background_color = background_color_property_->getColor();
+  settings.background_color.setAlpha(190);
+  settings.axis_color = axis_color_property_->getColor();
+  settings.axis_color.setAlpha(230);
+  settings.grid_color = grid_color_property_->getColor();
+  settings.grid_color.setAlpha(80);
+  settings.text_color = text_color_property_->getColor();
+  settings.text_color.setAlpha(235);
+  return settings;
+}
+
+std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
+{
+  const Plot2DConfig config = configFromProperties_();
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  const Plot2DControllerState & state = controller_.state();
+
+  RenderableSeries series;
+  series.label = config.series.empty() ? "Series" : config.series.front().label;
+  series.enabled = !config.series.empty() && config.series.front().enabled;
+  series.samples = state.samples.samples();
+  return {series};
+}
+
+void Plot2DDisplay::updateOverlayGeometry_()
+{
+  if (!overlay_) {
+    return;
+  }
+
+  const Plot2DConfig config = configFromProperties_();
+  overlay_->updateTextureSize(config.layout.width, config.layout.height);
+  overlay_->setDimensions(config.layout.width, config.layout.height);
+  overlay_->setPosition(
+    config.layout.x_offset,
+    config.layout.y_offset,
+    rviz_2d_overlay_plugins::HorizontalAlignment::RIGHT,
+    rviz_2d_overlay_plugins::VerticalAlignment::TOP);
+}
+
+void Plot2DDisplay::renderOverlay_()
+{
+  if (!overlay_) {
+    return;
+  }
+
+  updateOverlayGeometry_();
+  if (!overlay_->isTextureReady()) {
+    return;
+  }
+
+  const PlotRenderSettings settings = renderSettingsFromProperties_();
+  const QImage rendered = renderer_.render(settings, renderableSeries_());
+  QColor clear_color(0, 0, 0, 0);
+  auto buffer = overlay_->getBuffer();
+  QImage target = buffer.getQImage(
+    static_cast<unsigned int>(settings.width),
+    static_cast<unsigned int>(settings.height),
+    clear_color);
+  QPainter painter(&target);
+  painter.drawImage(0, 0, rendered);
+}
+
+void Plot2DDisplay::unsubscribe_()
+{
+  subscription_.reset();
+}
+
+double Plot2DDisplay::receiveNowSeconds_() const
+{
+  if (node_) {
+    return node_->get_clock()->now().seconds();
+  }
+  return rclcpp::Clock().now().seconds();
 }
 
 }  // namespace rviz_2d_plot_plugin
