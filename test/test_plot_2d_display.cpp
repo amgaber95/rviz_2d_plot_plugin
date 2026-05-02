@@ -108,6 +108,18 @@ public:
   {
     return display.controller_.state();
   }
+
+  static std::vector<std::string> topicOptions(Plot2DDisplay & display)
+  {
+    return display.topicOptions_();
+  }
+
+  static std::vector<std::string> fieldOptions(
+    Plot2DDisplay & display,
+    const std::string & topic)
+  {
+    return display.fieldOptionsForTopic_(topic);
+  }
 };
 
 }  // namespace rviz_2d_plot_plugin
@@ -381,4 +393,44 @@ TEST(Plot2DDisplay, ClearHistoryPropertyClearsSamplesAndResetsCheckbox)
   EXPECT_TRUE(state.samples.empty());
   EXPECT_FALSE(state.latest_value.has_value());
   EXPECT_FALSE(Plot2DDisplayTestAccessor::clearHistory(display)->getBool());
+}
+
+TEST(Plot2DDisplay, TopicOptionsListVisibleTopicsSortedByName)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  Plot2DDisplayTestAccessor::setTopics(
+    display,
+    TopicTypeMap{
+    {"/zed/odom", {"nav_msgs/msg/Odometry"}},
+    {"/cmd_vel_out", {"geometry_msgs/msg/Twist"}},
+    {"/diagnostics", {"std_msgs/msg/Float64"}},
+  });
+
+  const std::vector<std::string> options =
+    Plot2DDisplayTestAccessor::topicOptions(display);
+
+  const std::vector<std::string> expected{
+    "/cmd_vel_out",
+    "/diagnostics",
+    "/zed/odom",
+  };
+  EXPECT_EQ(options, expected);
+}
+
+TEST(Plot2DDisplay, FieldOptionsListNumericScalarsForSelectedTopic)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  Plot2DDisplayTestAccessor::setTopics(
+    display,
+    TopicTypeMap{{"/cmd_vel_out", {"geometry_msgs/msg/Twist"}}});
+
+  const std::vector<std::string> options =
+    Plot2DDisplayTestAccessor::fieldOptions(display, "/cmd_vel_out");
+
+  EXPECT_NE(std::find(options.begin(), options.end(), "linear/x"), options.end());
+  EXPECT_NE(std::find(options.begin(), options.end(), "angular/z"), options.end());
+  EXPECT_EQ(
+    Plot2DDisplayTestAccessor::fieldOptions(display, "/missing").size(), 0U);
 }

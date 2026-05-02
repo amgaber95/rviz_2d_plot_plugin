@@ -66,6 +66,10 @@ protected:
 private Q_SLOTS:
   void onConfigPropertyChanged();
   void onClearHistoryChanged();
+  void onTopicOptionsRequested(
+    rviz_common::properties::EditableEnumProperty * property);
+  void onFieldOptionsRequested(
+    rviz_common::properties::EditableEnumProperty * property);
 
 private:
   using SerializedMessageCallback =
@@ -95,6 +99,8 @@ private:
   void renderOverlay_();
   void unsubscribe_();
   double receiveNowSeconds_() const;
+  std::vector<std::string> topicOptions_() const;
+  std::vector<std::string> fieldOptionsForTopic_(const std::string & topic) const;
 
   rviz_common::properties::BoolProperty * pause_plot_property_{nullptr};
   rviz_common::properties::BoolProperty * clear_history_property_{nullptr};

@@ -8,6 +8,7 @@
 
 #include <QColor>
 #include <QImage>
+#include <QObject>
 #include <QPainter>
 #include <QVariant>
 
@@ -87,9 +88,19 @@ Plot2DDisplay::Plot2DDisplay()
   series_topic_property_ = new rviz_common::properties::EditableEnumProperty(
     "Topic", "", "ROS 2 topic to subscribe to.", series_1_property_,
     SLOT(onConfigPropertyChanged()), this);
+  QObject::connect(
+    series_topic_property_,
+    &rviz_common::properties::EditableEnumProperty::requestOptions,
+    this,
+    &Plot2DDisplay::onTopicOptionsRequested);
   series_field_property_ = new rviz_common::properties::EditableEnumProperty(
     "Field", "", "Numeric or boolean field path inside the selected message.",
     series_1_property_, SLOT(onConfigPropertyChanged()), this);
+  QObject::connect(
+    series_field_property_,
+    &rviz_common::properties::EditableEnumProperty::requestOptions,
+    this,
+    &Plot2DDisplay::onFieldOptionsRequested);
   series_label_property_ = new rviz_common::properties::StringProperty(
     "Label", "Series", "Legend label for this series.", series_1_property_,
     SLOT(onConfigPropertyChanged()), this);
@@ -246,6 +257,34 @@ void Plot2DDisplay::onClearHistoryChanged()
   }
   clear_history_property_->setBool(false);
   renderOverlay_();
+}
+
+void Plot2DDisplay::onTopicOptionsRequested(
+  rviz_common::properties::EditableEnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+
+  property->clearOptions();
+  for (const std::string & topic : topicOptions_()) {
+    property->addOptionStd(topic);
+  }
+}
+
+void Plot2DDisplay::onFieldOptionsRequested(
+  rviz_common::properties::EditableEnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+
+  property->clearOptions();
+  for (const std::string & field :
+    fieldOptionsForTopic_(series_topic_property_->getStdString()))
+  {
+    property->addOptionStd(field);
+  }
 }
 
 Plot2DConfig Plot2DDisplay::configFromProperties_() const
@@ -430,6 +469,36 @@ double Plot2DDisplay::receiveNowSeconds_() const
     return node_->get_clock()->now().seconds();
   }
   return rclcpp::Clock().now().seconds();
+}
+
+std::vector<std::string> Plot2DDisplay::topicOptions_() const
+{
+  const TopicTypeMap topics = ros_graph_ops_.get_topic_names_and_types ?
+    ros_graph_ops_.get_topic_names_and_types() : TopicTypeMap{};
+
+  std::vector<std::string> options;
+  options.reserve(topics.size());
+  for (const auto & [topic, types] : topics) {
+    (void)types;
+    options.push_back(topic);
+  }
+  std::sort(options.begin(), options.end());
+  return options;
+}
+
+std::vector<std::string> Plot2DDisplay::fieldOptionsForTopic_(
+  const std::string & topic) const
+{
+  const TopicTypeMap topics = ros_graph_ops_.get_topic_names_and_types ?
+    ros_graph_ops_.get_topic_names_and_types() : TopicTypeMap{};
+  const auto topic_it = topics.find(topic);
+  if (topic_it == topics.end() || topic_it->second.size() != 1U) {
+    return {};
+  }
+
+  FieldPathOptions fields = numericScalarFieldPathsForType(topic_it->second.front());
+  std::sort(fields.paths.begin(), fields.paths.end());
+  return fields.paths;
 }
 
 }  // namespace rviz_2d_plot_plugin
