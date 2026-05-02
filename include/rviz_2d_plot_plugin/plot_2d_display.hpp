@@ -65,6 +65,7 @@ protected:
 
 private Q_SLOTS:
   void onConfigPropertyChanged();
+  void onSeriesCountChanged();
   void onClearHistoryChanged();
   void onTopicOptionsRequested(
     rviz_common::properties::EditableEnumProperty * property);
@@ -89,7 +90,22 @@ private:
         SerializedMessageCallback)> create_generic_subscription;
   };
 
+  struct SeriesPropertySet
+  {
+    rviz_common::properties::Property * root{nullptr};
+    rviz_common::properties::BoolProperty * enabled{nullptr};
+    rviz_common::properties::EditableEnumProperty * topic{nullptr};
+    rviz_common::properties::EditableEnumProperty * field{nullptr};
+    rviz_common::properties::StringProperty * label{nullptr};
+  };
+
+  std::vector<SeriesConfig> seriesConfigFromProperties_() const;
   Plot2DConfig configFromProperties_() const;
+  void rebuildSeriesProperties_(
+    int count,
+    const std::vector<SeriesConfig> & values);
+  const SeriesPropertySet * seriesPropertiesForField_(
+    rviz_common::properties::EditableEnumProperty * property) const;
   void resolveAndSubscribe_();
   void onSerializedMessage_(
     const std::string & topic,
@@ -107,11 +123,8 @@ private:
   rviz_common::properties::BoolProperty * pause_plot_property_{nullptr};
   rviz_common::properties::BoolProperty * clear_history_property_{nullptr};
   rviz_common::properties::Property * series_root_property_{nullptr};
-  rviz_common::properties::Property * series_1_property_{nullptr};
-  rviz_common::properties::BoolProperty * series_enabled_property_{nullptr};
-  rviz_common::properties::EditableEnumProperty * series_topic_property_{nullptr};
-  rviz_common::properties::EditableEnumProperty * series_field_property_{nullptr};
-  rviz_common::properties::StringProperty * series_label_property_{nullptr};
+  rviz_common::properties::IntProperty * series_count_property_{nullptr};
+  std::vector<SeriesPropertySet> series_properties_;
   rviz_common::properties::Property * time_root_property_{nullptr};
   rviz_common::properties::FloatProperty * window_seconds_property_{nullptr};
   rviz_common::properties::FloatProperty * refresh_rate_property_{nullptr};

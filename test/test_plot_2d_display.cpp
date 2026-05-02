@@ -206,6 +206,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
 
   auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
   ASSERT_NE(nullptr, series);
+  EXPECT_NE(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count"));
   EXPECT_NE(nullptr, findChild(series, "Enabled"));
   EXPECT_NE(nullptr, findChild(series, "Topic"));
   EXPECT_NE(nullptr, findChild(series, "Field"));
@@ -311,6 +312,38 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.layout.height, 180);
   EXPECT_EQ(config.layout.x_offset, 20);
   EXPECT_EQ(config.layout.y_offset, 30);
+}
+
+TEST(Plot2DDisplay, BuildsPlotConfigFromMultipleSeriesProperties)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_count =
+    findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(2);
+  auto * series_1 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  auto * series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+
+  findChild(series_1, "Topic")->setValue("/cmd_vel");
+  findChild(series_1, "Field")->setValue("linear/x");
+  findChild(series_1, "Label")->setValue("Linear X");
+  findChild(series_2, "Topic")->setValue("/cmd_vel");
+  findChild(series_2, "Field")->setValue("angular/z");
+  findChild(series_2, "Label")->setValue("Angular Z");
+
+  const Plot2DConfig config = Plot2DDisplayTestAccessor::configFromProperties(display);
+
+  ASSERT_EQ(config.series.size(), 2U);
+  EXPECT_EQ(config.series[0].topic, "/cmd_vel");
+  EXPECT_EQ(config.series[0].field, "linear/x");
+  EXPECT_EQ(config.series[0].label, "Linear X");
+  EXPECT_EQ(config.series[1].topic, "/cmd_vel");
+  EXPECT_EQ(config.series[1].field, "angular/z");
+  EXPECT_EQ(config.series[1].label, "Angular Z");
 }
 
 TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)

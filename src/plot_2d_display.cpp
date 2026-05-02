@@ -81,30 +81,10 @@ Plot2DDisplay::Plot2DDisplay()
 
   series_root_property_ = new rviz_common::properties::Property(
     "Series", QVariant(), "Topic field series to draw.", this);
-  series_1_property_ = new rviz_common::properties::Property(
-    "Series 1", QVariant(), "First plotted topic field.", series_root_property_);
-  series_enabled_property_ = new rviz_common::properties::BoolProperty(
-    "Enabled", true, "Enable this series.", series_1_property_,
-    SLOT(onConfigPropertyChanged()), this);
-  series_topic_property_ = new rviz_common::properties::EditableEnumProperty(
-    "Topic", "", "ROS 2 topic to subscribe to.", series_1_property_,
-    SLOT(onConfigPropertyChanged()), this);
-  QObject::connect(
-    series_topic_property_,
-    &rviz_common::properties::EditableEnumProperty::requestOptions,
-    this,
-    &Plot2DDisplay::onTopicOptionsRequested);
-  series_field_property_ = new rviz_common::properties::EditableEnumProperty(
-    "Field", "", "Numeric or boolean field path inside the selected message.",
-    series_1_property_, SLOT(onConfigPropertyChanged()), this);
-  QObject::connect(
-    series_field_property_,
-    &rviz_common::properties::EditableEnumProperty::requestOptions,
-    this,
-    &Plot2DDisplay::onFieldOptionsRequested);
-  series_label_property_ = new rviz_common::properties::StringProperty(
-    "Label", "Series", "Legend label for this series.", series_1_property_,
-    SLOT(onConfigPropertyChanged()), this);
+  series_count_property_ = new rviz_common::properties::IntProperty(
+    "Series Count", 1, "Number of plotted topic fields.",
+    series_root_property_, SLOT(onSeriesCountChanged()), this, 1, 12);
+  rebuildSeriesProperties_(1, {SeriesConfig{}});
 
   time_root_property_ = new rviz_common::properties::Property(
     "Time", QVariant(), "Time-series history and redraw settings.", this);
@@ -247,6 +227,13 @@ void Plot2DDisplay::onConfigPropertyChanged()
   renderOverlay_();
 }
 
+void Plot2DDisplay::onSeriesCountChanged()
+{
+  const std::vector<SeriesConfig> current = seriesConfigFromProperties_();
+  rebuildSeriesProperties_(series_count_property_->getInt(), current);
+  onConfigPropertyChanged();
+}
+
 void Plot2DDisplay::onClearHistoryChanged()
 {
   if (!clear_history_property_ || !clear_history_property_->getBool()) {
@@ -280,23 +267,38 @@ void Plot2DDisplay::onFieldOptionsRequested(
     return;
   }
 
+  const SeriesPropertySet * series = seriesPropertiesForField_(property);
+  if (!series || !series->topic) {
+    return;
+  }
+
   property->clearOptions();
   for (const std::string & field :
-    fieldOptionsForTopic_(series_topic_property_->getStdString()))
+    fieldOptionsForTopic_(series->topic->getStdString()))
   {
     property->addOptionStd(field);
   }
 }
 
+std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
+{
+  std::vector<SeriesConfig> series;
+  series.reserve(series_properties_.size());
+  for (const SeriesPropertySet & properties : series_properties_) {
+    SeriesConfig config;
+    config.enabled = properties.enabled && properties.enabled->getBool();
+    config.topic = properties.topic ? properties.topic->getStdString() : "";
+    config.field = properties.field ? properties.field->getStdString() : "";
+    config.label = properties.label ? properties.label->getStdString() : "Series";
+    series.push_back(std::move(config));
+  }
+  return series;
+}
+
 Plot2DConfig Plot2DDisplay::configFromProperties_() const
 {
   Plot2DConfig config;
-  SeriesConfig series;
-  series.enabled = series_enabled_property_->getBool();
-  series.topic = series_topic_property_->getStdString();
-  series.field = series_field_property_->getStdString();
-  series.label = series_label_property_->getStdString();
-  config.series = {series};
+  config.series = seriesConfigFromProperties_();
 
   config.time.window_seconds = window_seconds_property_->getFloat();
   config.time.refresh_rate_hz = refresh_rate_property_->getFloat();
@@ -313,6 +315,69 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.layout.y_offset = y_offset_property_->getInt();
   config.repair();
   return config;
+}
+
+void Plot2DDisplay::rebuildSeriesProperties_(
+  const int count,
+  const std::vector<SeriesConfig> & values)
+{
+  const int repaired_count = std::clamp(count, 1, 12);
+  if (series_count_property_->getInt() != repaired_count) {
+    series_count_property_->setInt(repaired_count);
+  }
+
+  series_root_property_->removeChildren(1);
+  series_properties_.clear();
+  series_properties_.reserve(static_cast<std::size_t>(repaired_count));
+
+  for (int i = 0; i < repaired_count; ++i) {
+    SeriesConfig value;
+    if (static_cast<std::size_t>(i) < values.size()) {
+      value = values[static_cast<std::size_t>(i)];
+    } else {
+      value.label = "Series " + std::to_string(i + 1);
+    }
+
+    SeriesPropertySet properties;
+    const QString name = "Series " + QString::number(i + 1);
+    properties.root = new rviz_common::properties::Property(
+      name, QVariant(), "Plotted topic field.", series_root_property_);
+    properties.enabled = new rviz_common::properties::BoolProperty(
+      "Enabled", value.enabled, "Enable this series.", properties.root,
+      SLOT(onConfigPropertyChanged()), this);
+    properties.topic = new rviz_common::properties::EditableEnumProperty(
+      "Topic", QString::fromStdString(value.topic), "ROS 2 topic to subscribe to.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    QObject::connect(
+      properties.topic,
+      &rviz_common::properties::EditableEnumProperty::requestOptions,
+      this,
+      &Plot2DDisplay::onTopicOptionsRequested);
+    properties.field = new rviz_common::properties::EditableEnumProperty(
+      "Field", QString::fromStdString(value.field),
+      "Numeric or boolean field path inside the selected message.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    QObject::connect(
+      properties.field,
+      &rviz_common::properties::EditableEnumProperty::requestOptions,
+      this,
+      &Plot2DDisplay::onFieldOptionsRequested);
+    properties.label = new rviz_common::properties::StringProperty(
+      "Label", QString::fromStdString(value.label), "Legend label for this series.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    series_properties_.push_back(properties);
+  }
+}
+
+const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField_(
+  rviz_common::properties::EditableEnumProperty * property) const
+{
+  for (const SeriesPropertySet & series : series_properties_) {
+    if (series.field == property) {
+      return &series;
+    }
+  }
+  return nullptr;
 }
 
 void Plot2DDisplay::resolveAndSubscribe_()
