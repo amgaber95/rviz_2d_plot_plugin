@@ -22,6 +22,7 @@ add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/plot_2d_config.hpp
   include/rviz_2d_plot_plugin/plot_2d_controller.hpp
   include/rviz_2d_plot_plugin/plot_2d_display.hpp
+  include/rviz_2d_plot_plugin/plot_2d_renderer.hpp
   include/rviz_2d_plot_plugin/plot_path_resolver.hpp
   include/rviz_2d_plot_plugin/plot_range.hpp
   include/rviz_2d_plot_plugin/sample_buffer.hpp
@@ -30,6 +31,7 @@ add_library(${PROJECT_NAME} SHARED
   src/plot_2d_config.cpp
   src/plot_2d_controller.cpp
   src/plot_2d_display.cpp
+  src/plot_2d_renderer.cpp
   src/plot_path_resolver.cpp
   src/plot_range.cpp
   src/sample_buffer.cpp
@@ -106,6 +108,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
   target_link_libraries(test_plot_range ${PROJECT_NAME})
+
+  ament_add_gtest(test_plot_2d_renderer test/test_plot_2d_renderer.cpp)
+  target_link_libraries(test_plot_2d_renderer ${PROJECT_NAME})
 
   ament_add_gtest(test_sample_buffer test/test_sample_buffer.cpp)
   target_link_libraries(test_sample_buffer ${PROJECT_NAME})
