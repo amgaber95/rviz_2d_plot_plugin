@@ -101,7 +101,7 @@ public:
     Plot2DDisplay & display,
     std::shared_ptr<rclcpp::SerializedMessage> message)
   {
-    display.onSerializedMessage_(std::move(message));
+    display.onSerializedMessage_("/value", std::move(message));
   }
 
   static const Plot2DControllerState & controllerState(Plot2DDisplay & display)
@@ -344,8 +344,9 @@ TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)
   const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
   EXPECT_EQ(created, 1);
   EXPECT_EQ(state.status, PlotControllerStatus::Ok);
-  EXPECT_EQ(state.topic, "/value");
-  EXPECT_EQ(state.type, "std_msgs/msg/Float64");
+  ASSERT_EQ(state.series.size(), 1U);
+  EXPECT_EQ(state.series[0].topic, "/value");
+  EXPECT_EQ(state.series[0].type, "std_msgs/msg/Float64");
 }
 
 TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
@@ -365,9 +366,10 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   Plot2DDisplayTestAccessor::onSerializedMessage(display, serializeMessage(message));
 
   const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
-  ASSERT_TRUE(state.latest_value.has_value());
-  EXPECT_DOUBLE_EQ(state.latest_value.value(), 12.5);
-  EXPECT_EQ(state.samples.size(), 1U);
+  ASSERT_EQ(state.series.size(), 1U);
+  ASSERT_TRUE(state.series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(state.series[0].latest_value.value(), 12.5);
+  EXPECT_EQ(state.series[0].samples.size(), 1U);
 }
 
 TEST(Plot2DDisplay, ClearHistoryPropertyClearsSamplesAndResetsCheckbox)
@@ -385,13 +387,14 @@ TEST(Plot2DDisplay, ClearHistoryPropertyClearsSamplesAndResetsCheckbox)
   std_msgs::msg::Float64 message;
   message.data = 7.0;
   Plot2DDisplayTestAccessor::onSerializedMessage(display, serializeMessage(message));
-  ASSERT_EQ(Plot2DDisplayTestAccessor::controllerState(display).samples.size(), 1U);
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
 
   Plot2DDisplayTestAccessor::clearHistory(display)->setValue(true);
 
   const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
-  EXPECT_TRUE(state.samples.empty());
-  EXPECT_FALSE(state.latest_value.has_value());
+  EXPECT_TRUE(state.series[0].samples.empty());
+  EXPECT_FALSE(state.series[0].latest_value.has_value());
   EXPECT_FALSE(Plot2DDisplayTestAccessor::clearHistory(display)->getBool());
 }
 

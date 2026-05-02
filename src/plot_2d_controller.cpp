@@ -6,6 +6,7 @@
 
 #include "rviz_2d_plot_plugin/plot_2d_controller.hpp"
 
+#include <cstddef>
 #include <utility>
 
 namespace rviz_2d_plot_plugin
@@ -34,6 +35,27 @@ PlotControllerStatus statusFromPathStatus(const PlotPathStatus status)
   return PlotControllerStatus::InvalidPath;
 }
 
+int statusSeverity(const PlotControllerStatus status)
+{
+  switch (status) {
+    case PlotControllerStatus::InvalidPath:
+    case PlotControllerStatus::UnsupportedPathSyntax:
+    case PlotControllerStatus::MissingFieldPath:
+    case PlotControllerStatus::AmbiguousTopicType:
+    case PlotControllerStatus::ExtractorError:
+    case PlotControllerStatus::ExtractionError:
+      return 3;
+    case PlotControllerStatus::Disabled:
+      return 0;
+    case PlotControllerStatus::Ok:
+      return 1;
+    case PlotControllerStatus::EmptySelection:
+    case PlotControllerStatus::WaitingForTopic:
+      return 2;
+  }
+  return 3;
+}
+
 }  // namespace
 
 void Plot2DController::configure(
@@ -43,34 +65,51 @@ void Plot2DController::configure(
   config_ = std::move(config);
   config_.repair();
   state_ = Plot2DControllerState{};
-  extractor_.reset();
+  extractors_.clear();
+  state_.series.reserve(config_.series.size());
+  extractors_.reserve(config_.series.size());
 
-  const SeriesConfig & series = config_.series.front();
-  if (!series.enabled) {
-    state_.status = PlotControllerStatus::Disabled;
-    state_.message = "Series is disabled";
-    return;
+  for (const SeriesConfig & series : config_.series) {
+    PlotSeriesControllerState series_state;
+    series_state.label = series.label;
+    std::unique_ptr<GenericFieldExtractor> extractor;
+
+    if (!series.enabled) {
+      series_state.status = PlotControllerStatus::Disabled;
+      series_state.message = "Series is disabled";
+      state_.series.push_back(std::move(series_state));
+      extractors_.push_back(nullptr);
+      continue;
+    }
+
+    const PlotPathResolution resolution =
+      resolveTopicFieldPath(series.topic, series.field, topics);
+    series_state.topic = resolution.topic;
+    series_state.type = resolution.type;
+
+    if (resolution.status != PlotPathStatus::Ok) {
+      setResolutionError(series_state, resolution);
+      state_.series.push_back(std::move(series_state));
+      extractors_.push_back(nullptr);
+      continue;
+    }
+
+    extractor = std::make_unique<GenericFieldExtractor>(
+      resolution.type, resolution.field_segments);
+    if (!extractor->ready()) {
+      series_state.status = PlotControllerStatus::ExtractorError;
+      series_state.message = extractor->error();
+      state_.series.push_back(std::move(series_state));
+      extractors_.push_back(nullptr);
+      continue;
+    }
+
+    series_state.status = PlotControllerStatus::Ok;
+    state_.series.push_back(std::move(series_state));
+    extractors_.push_back(std::move(extractor));
   }
 
-  const PlotPathResolution resolution =
-    resolveTopicFieldPath(series.topic, series.field, topics);
-  state_.topic = resolution.topic;
-  state_.type = resolution.type;
-
-  if (resolution.status != PlotPathStatus::Ok) {
-    setResolutionError(resolution);
-    return;
-  }
-
-  extractor_ = std::make_unique<GenericFieldExtractor>(
-    resolution.type, resolution.field_segments);
-  if (!extractor_->ready()) {
-    state_.status = PlotControllerStatus::ExtractorError;
-    state_.message = extractor_->error();
-    return;
-  }
-
-  state_.status = PlotControllerStatus::Ok;
+  updateAggregateStatus();
 }
 
 bool Plot2DController::appendSerializedMessage(
@@ -78,29 +117,42 @@ bool Plot2DController::appendSerializedMessage(
   const rclcpp::SerializedMessage & serialized,
   const double receive_time)
 {
-  if (topic != state_.topic || config_.time.paused ||
-    state_.status != PlotControllerStatus::Ok || !extractor_)
-  {
+  if (config_.time.paused) {
     return false;
   }
 
-  const FieldExtractionResult result = extractor_->extract(serialized);
-  if (result.status != FieldExtractionStatus::Ok || !result.value.has_value()) {
-    state_.status = PlotControllerStatus::ExtractionError;
-    state_.message = result.message;
-    return false;
+  bool appended = false;
+  for (std::size_t i = 0; i < state_.series.size() && i < extractors_.size(); ++i) {
+    PlotSeriesControllerState & series = state_.series[i];
+    if (topic != series.topic || series.status != PlotControllerStatus::Ok ||
+      !extractors_[i])
+    {
+      continue;
+    }
+
+    const FieldExtractionResult result = extractors_[i]->extract(serialized);
+    if (result.status != FieldExtractionStatus::Ok || !result.value.has_value()) {
+      series.status = PlotControllerStatus::ExtractionError;
+      series.message = result.message;
+      continue;
+    }
+
+    series.samples.append(receive_time, result.value.value());
+    series.samples.pruneToWindow(receive_time, config_.time.window_seconds);
+    series.latest_value = result.value;
+    appended = true;
   }
 
-  state_.samples.append(receive_time, result.value.value());
-  state_.samples.pruneToWindow(receive_time, config_.time.window_seconds);
-  state_.latest_value = result.value;
-  return true;
+  updateAggregateStatus();
+  return appended;
 }
 
 void Plot2DController::clearHistory()
 {
-  state_.samples.clear();
-  state_.latest_value.reset();
+  for (PlotSeriesControllerState & series : state_.series) {
+    series.samples.clear();
+    series.latest_value.reset();
+  }
 }
 
 const Plot2DConfig & Plot2DController::config() const
@@ -113,10 +165,31 @@ const Plot2DControllerState & Plot2DController::state() const
   return state_;
 }
 
-void Plot2DController::setResolutionError(const PlotPathResolution & resolution)
+void Plot2DController::setResolutionError(
+  PlotSeriesControllerState & series_state,
+  const PlotPathResolution & resolution)
 {
-  state_.status = statusFromPathStatus(resolution.status);
-  state_.message = resolution.message;
+  series_state.status = statusFromPathStatus(resolution.status);
+  series_state.message = resolution.message;
+}
+
+void Plot2DController::updateAggregateStatus()
+{
+  if (state_.series.empty()) {
+    state_.status = PlotControllerStatus::EmptySelection;
+    state_.message = "No series configured";
+    return;
+  }
+
+  const PlotSeriesControllerState * selected = nullptr;
+  for (const PlotSeriesControllerState & series : state_.series) {
+    if (!selected || statusSeverity(series.status) > statusSeverity(selected->status)) {
+      selected = &series;
+    }
+  }
+
+  state_.status = selected->status;
+  state_.message = selected->message;
 }
 
 }  // namespace rviz_2d_plot_plugin

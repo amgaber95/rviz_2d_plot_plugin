@@ -13,6 +13,7 @@
 #include <QVariant>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <sstream>
 #include <utility>
@@ -325,7 +326,15 @@ void Plot2DDisplay::resolveAndSubscribe_()
   subscription_.reset();
 
   const Plot2DControllerState & state = controller_.state();
-  if (state.status != PlotControllerStatus::Ok) {
+  const PlotSeriesControllerState * subscription_series = nullptr;
+  for (const PlotSeriesControllerState & series : state.series) {
+    if (series.status == PlotControllerStatus::Ok) {
+      subscription_series = &series;
+      break;
+    }
+  }
+
+  if (!subscription_series) {
     updateStatusFromController_();
     return;
   }
@@ -336,13 +345,14 @@ void Plot2DDisplay::resolveAndSubscribe_()
   }
 
   try {
+    const std::string subscribed_topic = subscription_series->topic;
     subscription_ = subscription_factory_.create_generic_subscription(
-      state.topic,
-      state.type,
+      subscription_series->topic,
+      subscription_series->type,
       qos_profile_,
-      [this](std::shared_ptr<rclcpp::SerializedMessage> message)
+      [this, subscribed_topic](std::shared_ptr<rclcpp::SerializedMessage> message)
       {
-        onSerializedMessage_(std::move(message));
+        onSerializedMessage_(subscribed_topic, std::move(message));
       });
   } catch (const std::exception & exception) {
     setStatus(
@@ -356,6 +366,7 @@ void Plot2DDisplay::resolveAndSubscribe_()
 }
 
 void Plot2DDisplay::onSerializedMessage_(
+  const std::string & topic,
   std::shared_ptr<rclcpp::SerializedMessage> message)
 {
   if (!message) {
@@ -364,8 +375,7 @@ void Plot2DDisplay::onSerializedMessage_(
 
   {
     std::lock_guard<std::mutex> lock(controller_mutex_);
-    controller_.appendSerializedMessage(
-      controller_.state().topic, *message, receiveNowSeconds_());
+    controller_.appendSerializedMessage(topic, *message, receiveNowSeconds_());
   }
   updateStatusFromController_();
   renderOverlay_();
@@ -412,11 +422,18 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
   std::lock_guard<std::mutex> lock(controller_mutex_);
   const Plot2DControllerState & state = controller_.state();
 
-  RenderableSeries series;
-  series.label = config.series.empty() ? "Series" : config.series.front().label;
-  series.enabled = !config.series.empty() && config.series.front().enabled;
-  series.samples = state.samples.samples();
-  return {series};
+  std::vector<RenderableSeries> output;
+  output.reserve(state.series.size());
+  for (std::size_t i = 0; i < state.series.size(); ++i) {
+    const PlotSeriesControllerState & source = state.series[i];
+    RenderableSeries series;
+    series.label = source.label.empty() ? "Series" : source.label;
+    series.enabled = source.status == PlotControllerStatus::Ok &&
+      i < config.series.size() && config.series[i].enabled;
+    series.samples = source.samples.samples();
+    output.push_back(std::move(series));
+  }
+  return output;
 }
 
 void Plot2DDisplay::updateOverlayGeometry_()

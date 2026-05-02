@@ -55,9 +55,10 @@ TEST(Plot2DController, ResolvesConfiguredSeries)
   controller.configure(makeConfig(), topics);
 
   ASSERT_EQ(controller.state().status, PlotControllerStatus::Ok);
-  EXPECT_EQ(controller.state().topic, "/cmd_vel");
-  EXPECT_EQ(controller.state().type, "geometry_msgs/msg/Twist");
-  EXPECT_TRUE(controller.state().samples.empty());
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_EQ(controller.state().series[0].topic, "/cmd_vel");
+  EXPECT_EQ(controller.state().series[0].type, "geometry_msgs/msg/Twist");
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
 }
 
 TEST(Plot2DController, AppendsExtractedSamplesAndPrunesToWindow)
@@ -70,11 +71,57 @@ TEST(Plot2DController, AppendsExtractedSamplesAndPrunesToWindow)
   EXPECT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(2.5), 12.0));
 
   ASSERT_EQ(controller.state().status, PlotControllerStatus::Ok);
-  ASSERT_EQ(controller.state().samples.size(), 1U);
-  EXPECT_DOUBLE_EQ(controller.state().samples.samples().front().time, 12.0);
-  EXPECT_DOUBLE_EQ(controller.state().samples.samples().front().value, 2.5);
-  ASSERT_TRUE(controller.state().latest_value.has_value());
-  EXPECT_DOUBLE_EQ(controller.state().latest_value.value(), 2.5);
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 12.0);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 2.5);
+  ASSERT_TRUE(controller.state().series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 2.5);
+}
+
+TEST(Plot2DController, AppendsSamplesForMultipleConfiguredSeries)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.series.push_back(config.series.front());
+  config.series[0].field = "linear/x";
+  config.series[0].label = "Linear X";
+  config.series[1].field = "angular/z";
+  config.series[1].label = "Angular Z";
+  controller.configure(config, topics);
+
+  EXPECT_TRUE(
+    controller.appendSerializedMessage(
+      "/cmd_vel", serializeTwist(1.5, -0.4), 10.0));
+
+  ASSERT_EQ(controller.state().series.size(), 2U);
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  ASSERT_EQ(controller.state().series[1].samples.size(), 1U);
+  EXPECT_EQ(controller.state().series[0].label, "Linear X");
+  EXPECT_EQ(controller.state().series[1].label, "Angular Z");
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 1.5);
+  EXPECT_DOUBLE_EQ(controller.state().series[1].samples.samples().front().value, -0.4);
+}
+
+TEST(Plot2DController, DisabledSeriesDoesNotHideValidSeriesStatus)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.series.push_back(config.series.front());
+  config.series[0].enabled = false;
+  config.series[1].field = "angular/z";
+  controller.configure(config, topics);
+
+  EXPECT_EQ(controller.state().status, PlotControllerStatus::Ok);
+  EXPECT_TRUE(
+    controller.appendSerializedMessage(
+      "/cmd_vel", serializeTwist(1.5, -0.4), 10.0));
+
+  ASSERT_EQ(controller.state().series.size(), 2U);
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
+  ASSERT_EQ(controller.state().series[1].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[1].samples.samples().front().value, -0.4);
 }
 
 TEST(Plot2DController, IgnoresUnrelatedTopicsAndPausedState)
@@ -88,7 +135,7 @@ TEST(Plot2DController, IgnoresUnrelatedTopicsAndPausedState)
   EXPECT_FALSE(controller.appendSerializedMessage("/other", serializeTwist(1.5), 10.0));
   EXPECT_FALSE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(2.5), 10.0));
 
-  EXPECT_TRUE(controller.state().samples.empty());
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
 }
 
 TEST(Plot2DController, ReportsResolutionErrorsWithoutAppending)
@@ -102,7 +149,8 @@ TEST(Plot2DController, ReportsResolutionErrorsWithoutAppending)
 
   EXPECT_EQ(controller.state().status, PlotControllerStatus::WaitingForTopic);
   EXPECT_FALSE(controller.appendSerializedMessage("/odom", serializeTwist(1.5), 10.0));
-  EXPECT_TRUE(controller.state().samples.empty());
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
 }
 
 TEST(Plot2DController, ClearsHistoryWithoutReconfiguring)
@@ -114,7 +162,7 @@ TEST(Plot2DController, ClearsHistoryWithoutReconfiguring)
 
   controller.clearHistory();
 
-  EXPECT_TRUE(controller.state().samples.empty());
-  EXPECT_FALSE(controller.state().latest_value.has_value());
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
+  EXPECT_FALSE(controller.state().series[0].latest_value.has_value());
   EXPECT_EQ(controller.state().status, PlotControllerStatus::Ok);
 }

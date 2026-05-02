@@ -91,7 +91,9 @@ private:
 
   Plot2DConfig configFromProperties_() const;
   void resolveAndSubscribe_();
-  void onSerializedMessage_(std::shared_ptr<rclcpp::SerializedMessage> message);
+  void onSerializedMessage_(
+    const std::string & topic,
+    std::shared_ptr<rclcpp::SerializedMessage> message);
   void updateStatusFromController_();
   PlotRenderSettings renderSettingsFromProperties_() const;
   std::vector<RenderableSeries> renderableSeries_() const;

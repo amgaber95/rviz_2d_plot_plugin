@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <rclcpp/serialized_message.hpp>
 
@@ -35,14 +36,22 @@ enum class PlotControllerStatus
   ExtractionError,
 };
 
-struct Plot2DControllerState
+struct PlotSeriesControllerState
 {
   PlotControllerStatus status{PlotControllerStatus::EmptySelection};
   std::string topic;
   std::string type;
+  std::string label;
   std::string message;
   RollingSampleBuffer samples;
   std::optional<double> latest_value;
+};
+
+struct Plot2DControllerState
+{
+  PlotControllerStatus status{PlotControllerStatus::EmptySelection};
+  std::string message;
+  std::vector<PlotSeriesControllerState> series;
 };
 
 class Plot2DController
@@ -63,11 +72,14 @@ public:
   const Plot2DControllerState & state() const;
 
 private:
-  void setResolutionError(const PlotPathResolution & resolution);
+  void setResolutionError(
+    PlotSeriesControllerState & series_state,
+    const PlotPathResolution & resolution);
+  void updateAggregateStatus();
 
   Plot2DConfig config_;
   Plot2DControllerState state_;
-  std::unique_ptr<GenericFieldExtractor> extractor_;
+  std::vector<std::unique_ptr<GenericFieldExtractor>> extractors_;
 };
 
 }  // namespace rviz_2d_plot_plugin
