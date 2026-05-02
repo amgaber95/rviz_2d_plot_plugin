@@ -106,6 +106,9 @@ if(BUILD_TESTING)
   target_link_libraries(test_plot_2d_controller ${PROJECT_NAME})
   ament_target_dependencies(test_plot_2d_controller rclcpp geometry_msgs)
 
+  ament_add_gtest(test_plot_2d_display test/test_plot_2d_display.cpp)
+  target_link_libraries(test_plot_2d_display ${PROJECT_NAME})
+
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
   target_link_libraries(test_plot_range ${PROJECT_NAME})
 
