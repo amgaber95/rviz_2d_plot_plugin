@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -403,6 +404,63 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   ASSERT_TRUE(state.series[0].latest_value.has_value());
   EXPECT_DOUBLE_EQ(state.series[0].latest_value.value(), 12.5);
   EXPECT_EQ(state.series[0].samples.size(), 1U);
+}
+
+TEST(Plot2DDisplay, CreatesSubscriptionsForMultipleSeriesTopics)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_count =
+    findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count");
+  ASSERT_NE(nullptr, series_count);
+  series_count->setValue(2);
+
+  auto * series_1 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  auto * series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  findChild(series_1, "Topic")->setValue("/left");
+  findChild(series_1, "Field")->setValue("data");
+  findChild(series_2, "Topic")->setValue("/right");
+  findChild(series_2, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display,
+    TopicTypeMap{
+    {"/left", {"std_msgs/msg/Float64"}},
+    {"/right", {"std_msgs/msg/Float64"}},
+  });
+
+  std::map<std::string, std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>>
+  callbacks;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&callbacks](
+      const std::string & topic,
+      const std::string & type,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> callback)
+    {
+      EXPECT_EQ(type, "std_msgs/msg/Float64");
+      callbacks[topic] = std::move(callback);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  ASSERT_EQ(callbacks.size(), 2U);
+  std_msgs::msg::Float64 left;
+  left.data = 1.25;
+  callbacks.at("/left")(serializeMessage(left));
+  std_msgs::msg::Float64 right;
+  right.data = -2.5;
+  callbacks.at("/right")(serializeMessage(right));
+
+  const auto & state = Plot2DDisplayTestAccessor::controllerState(display);
+  ASSERT_EQ(state.series.size(), 2U);
+  ASSERT_EQ(state.series[0].samples.size(), 1U);
+  ASSERT_EQ(state.series[1].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(state.series[0].samples.samples().front().value, 1.25);
+  EXPECT_DOUBLE_EQ(state.series[1].samples.samples().front().value, -2.5);
 }
 
 TEST(Plot2DDisplay, ClearHistoryPropertyClearsSamplesAndResetsCheckbox)

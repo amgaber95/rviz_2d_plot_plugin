@@ -388,18 +388,22 @@ void Plot2DDisplay::resolveAndSubscribe_()
 
   std::lock_guard<std::mutex> lock(controller_mutex_);
   controller_.configure(config, topics);
-  subscription_.reset();
+  subscriptions_.clear();
 
   const Plot2DControllerState & state = controller_.state();
-  const PlotSeriesControllerState * subscription_series = nullptr;
+  std::vector<std::pair<std::string, std::string>> subscription_topics;
   for (const PlotSeriesControllerState & series : state.series) {
     if (series.status == PlotControllerStatus::Ok) {
-      subscription_series = &series;
-      break;
+      const std::pair<std::string, std::string> topic_type{series.topic, series.type};
+      const auto duplicate = std::find(
+        subscription_topics.begin(), subscription_topics.end(), topic_type);
+      if (duplicate == subscription_topics.end()) {
+        subscription_topics.push_back(topic_type);
+      }
     }
   }
 
-  if (!subscription_series) {
+  if (subscription_topics.empty()) {
     updateStatusFromController_();
     return;
   }
@@ -410,19 +414,21 @@ void Plot2DDisplay::resolveAndSubscribe_()
   }
 
   try {
-    const std::string subscribed_topic = subscription_series->topic;
-    subscription_ = subscription_factory_.create_generic_subscription(
-      subscription_series->topic,
-      subscription_series->type,
-      qos_profile_,
-      [this, subscribed_topic](std::shared_ptr<rclcpp::SerializedMessage> message)
-      {
-        onSerializedMessage_(subscribed_topic, std::move(message));
-      });
+    for (const auto & [topic, type] : subscription_topics) {
+      subscriptions_.push_back(
+        subscription_factory_.create_generic_subscription(
+          topic,
+          type,
+          qos_profile_,
+          [this, topic](std::shared_ptr<rclcpp::SerializedMessage> message)
+          {
+            onSerializedMessage_(topic, std::move(message));
+          }));
+    }
   } catch (const std::exception & exception) {
     setStatus(
       rviz_common::properties::StatusProperty::Error,
-      "Series 1",
+      "Subscriptions",
       QString::fromStdString(exception.what()));
     return;
   }
@@ -542,7 +548,7 @@ void Plot2DDisplay::renderOverlay_()
 
 void Plot2DDisplay::unsubscribe_()
 {
-  subscription_.reset();
+  subscriptions_.clear();
 }
 
 double Plot2DDisplay::receiveNowSeconds_() const

@@ -145,7 +145,7 @@ private:
 
   std::shared_ptr<rviz_2d_overlay_plugins::OverlayObject> overlay_;
   rclcpp::Node::SharedPtr node_;
-  rclcpp::GenericSubscription::SharedPtr subscription_;
+  std::vector<rclcpp::GenericSubscription::SharedPtr> subscriptions_;
   rclcpp::QoS qos_profile_{10};
   RosGraphOps ros_graph_ops_;
   SubscriptionFactory subscription_factory_;
