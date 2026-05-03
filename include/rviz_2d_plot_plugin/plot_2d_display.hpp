@@ -126,6 +126,7 @@ private:
   void updateOverlayGeometry_();
   void renderOverlay_();
   void unsubscribe_();
+  bool shouldRetrySubscriptions_() const;
   double receiveNowSeconds_() const;
   void prepareOverlayRendering_();
   TopicTypeMap topicNamesAndTypes_() const;

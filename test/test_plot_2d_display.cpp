@@ -121,6 +121,11 @@ public:
     display.resolveAndSubscribe_();
   }
 
+  static void update(Plot2DDisplay & display, const float wall_dt, const float ros_dt)
+  {
+    display.update(wall_dt, ros_dt);
+  }
+
   static void onSerializedMessage(
     Plot2DDisplay & display,
     std::shared_ptr<rclcpp::SerializedMessage> message)
@@ -444,6 +449,49 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   ASSERT_TRUE(state.series[0].latest_value.has_value());
   EXPECT_DOUBLE_EQ(state.series[0].latest_value.value(), 12.5);
   EXPECT_EQ(state.series[0].samples.size(), 1U);
+}
+
+TEST(Plot2DDisplay, DoesNotRecreateHealthySubscriptionsDuringRetryUpdate)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  int created = 0;
+  std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> callback;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&created, &callback](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> created_callback)
+    {
+      ++created;
+      callback = std::move(created_callback);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+  ASSERT_EQ(created, 1);
+  ASSERT_TRUE(callback);
+
+  std_msgs::msg::Float64 message;
+  message.data = 12.5;
+  callback(serializeMessage(message));
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+
+  Plot2DDisplayTestAccessor::update(display, 1.1F, 1.1F);
+
+  EXPECT_EQ(created, 1);
+  EXPECT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
 }
 
 TEST(Plot2DDisplay, CreatesSubscriptionsForMultipleSeriesTopics)

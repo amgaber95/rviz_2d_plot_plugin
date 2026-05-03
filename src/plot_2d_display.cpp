@@ -213,7 +213,9 @@ void Plot2DDisplay::update(const float wall_dt, const float ros_dt)
   retry_elapsed_seconds_ += std::max(0.0F, wall_dt);
   if (retry_elapsed_seconds_ >= 1.0) {
     retry_elapsed_seconds_ = 0.0;
-    resolveAndSubscribe_();
+    if (shouldRetrySubscriptions_()) {
+      resolveAndSubscribe_();
+    }
   }
 
   render_elapsed_seconds_ += std::max(0.0F, wall_dt);
@@ -567,6 +569,14 @@ void Plot2DDisplay::renderOverlay_()
 void Plot2DDisplay::unsubscribe_()
 {
   subscriptions_.clear();
+}
+
+bool Plot2DDisplay::shouldRetrySubscriptions_() const
+{
+  std::lock_guard<std::mutex> lock(controller_mutex_);
+  const PlotControllerStatus status = controller_.state().status;
+  return status == PlotControllerStatus::WaitingForTopic ||
+         status == PlotControllerStatus::AmbiguousTopicType;
 }
 
 double Plot2DDisplay::receiveNowSeconds_() const
