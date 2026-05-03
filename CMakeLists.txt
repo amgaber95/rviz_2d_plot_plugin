@@ -18,6 +18,7 @@ find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_2d_overlay_plugins REQUIRED)
 find_package(rviz_2d_overlay_msgs REQUIRED)
+find_package(rviz_rendering REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
 
 add_library(${PROJECT_NAME} SHARED
@@ -59,6 +60,7 @@ ament_target_dependencies(${PROJECT_NAME} PUBLIC
   rosidl_typesupport_introspection_cpp
   rviz_common
   rviz_2d_overlay_msgs
+  rviz_rendering
 )
 
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)

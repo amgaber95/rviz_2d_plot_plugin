@@ -30,6 +30,7 @@
 #include <rviz_common/properties/property.hpp>
 #include <rviz_common/properties/status_property.hpp>
 #include <rviz_common/properties/string_property.hpp>
+#include <rviz_rendering/render_system.hpp>
 
 namespace rviz_2d_plot_plugin
 {
@@ -73,6 +74,12 @@ std::string statusText(const Plot2DControllerState & state)
 
 Plot2DDisplay::Plot2DDisplay()
 {
+  overlay_backend_ops_.prepare_overlays =
+    [](Ogre::SceneManager * scene_manager)
+    {
+      rviz_rendering::RenderSystem::get()->prepareOverlays(scene_manager);
+    };
+
   pause_plot_property_ = new rviz_common::properties::BoolProperty(
     "Pause Plot", false, "Pause incoming sample collection and hold the plot.",
     this, SLOT(onConfigPropertyChanged()), this);
@@ -174,6 +181,7 @@ void Plot2DDisplay::onInitialize()
   std::ostringstream name;
   name << "rviz_2d_plot_overlay_"
        << reinterpret_cast<std::uintptr_t>(this);
+  prepareOverlayRendering_();
   overlay_ =
     std::make_shared<rviz_2d_overlay_plugins::OverlayObject>(name.str());
   overlay_->updateTextureSize(360, 220);
@@ -567,6 +575,13 @@ double Plot2DDisplay::receiveNowSeconds_() const
     return node_->get_clock()->now().seconds();
   }
   return rclcpp::Clock().now().seconds();
+}
+
+void Plot2DDisplay::prepareOverlayRendering_()
+{
+  if (overlay_backend_ops_.prepare_overlays) {
+    overlay_backend_ops_.prepare_overlays(scene_manager_);
+  }
 }
 
 TopicTypeMap Plot2DDisplay::topicNamesAndTypes_() const

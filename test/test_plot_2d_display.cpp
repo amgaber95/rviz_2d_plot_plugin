@@ -29,6 +29,11 @@
 #include <rviz_common/properties/property.hpp>
 #include <rviz_common/properties/string_property.hpp>
 
+namespace Ogre
+{
+class SceneManager;
+}  // namespace Ogre
+
 #include "rviz_2d_plot_plugin/plot_2d_config.hpp"
 #include "rviz_2d_plot_plugin/plot_2d_controller.hpp"
 #include "rviz_2d_plot_plugin/plot_2d_display.hpp"
@@ -97,6 +102,18 @@ public:
       std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>)> factory)
   {
     display.subscription_factory_.create_generic_subscription = std::move(factory);
+  }
+
+  static void setOverlayPreparer(
+    Plot2DDisplay & display,
+    std::function<void(Ogre::SceneManager *)> prepare)
+  {
+    display.overlay_backend_ops_.prepare_overlays = std::move(prepare);
+  }
+
+  static void prepareOverlayRendering(Plot2DDisplay & display)
+  {
+    display.prepareOverlayRendering_();
   }
 
   static void resolveAndSubscribe(Plot2DDisplay & display)
@@ -240,6 +257,23 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(style, "Axis Color"));
   EXPECT_NE(nullptr, findChild(style, "Grid Color"));
   EXPECT_NE(nullptr, findChild(style, "Text Color"));
+}
+
+TEST(Plot2DDisplay, PreparesRvizOverlayRenderingBackend)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  int prepare_calls = 0;
+  Plot2DDisplayTestAccessor::setOverlayPreparer(
+    display,
+    [&prepare_calls](Ogre::SceneManager * scene_manager) {
+      (void)scene_manager;
+      ++prepare_calls;
+    });
+
+  Plot2DDisplayTestAccessor::prepareOverlayRendering(display);
+
+  EXPECT_EQ(prepare_calls, 1);
 }
 
 TEST(Plot2DDisplay, PlacesActionsBeforeConfigurationGroups)

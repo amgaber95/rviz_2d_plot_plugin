@@ -36,6 +36,11 @@ class StringProperty;
 }  // namespace properties
 }  // namespace rviz_common
 
+namespace Ogre
+{
+class SceneManager;
+}  // namespace Ogre
+
 namespace rviz_2d_overlay_plugins
 {
 class OverlayObject;
@@ -90,6 +95,11 @@ private:
         SerializedMessageCallback)> create_generic_subscription;
   };
 
+  struct OverlayBackendOps
+  {
+    std::function<void(Ogre::SceneManager *)> prepare_overlays;
+  };
+
   struct SeriesPropertySet
   {
     rviz_common::properties::Property * root{nullptr};
@@ -117,6 +127,7 @@ private:
   void renderOverlay_();
   void unsubscribe_();
   double receiveNowSeconds_() const;
+  void prepareOverlayRendering_();
   TopicTypeMap topicNamesAndTypes_() const;
   std::vector<std::string> topicOptions_() const;
   std::vector<std::string> fieldOptionsForTopic_(const std::string & topic) const;
@@ -150,6 +161,7 @@ private:
   rclcpp::QoS qos_profile_{10};
   RosGraphOps ros_graph_ops_;
   SubscriptionFactory subscription_factory_;
+  OverlayBackendOps overlay_backend_ops_;
   Plot2DController controller_;
   Plot2DRenderer renderer_;
   double retry_elapsed_seconds_{0.0};
