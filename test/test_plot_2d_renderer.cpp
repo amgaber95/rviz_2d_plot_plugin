@@ -19,6 +19,7 @@ using rviz_2d_plot_plugin::Plot2DRenderer;
 using rviz_2d_plot_plugin::PlotRenderSettings;
 using rviz_2d_plot_plugin::PlotSample;
 using rviz_2d_plot_plugin::RenderableSeries;
+using rviz_2d_plot_plugin::LineStyle;
 
 namespace
 {
@@ -46,6 +47,32 @@ bool hasDifferentPixel(const QImage & image, const QColor & color)
     }
   }
   return false;
+}
+
+int countPixelsCloseTo(const QImage & image, const QColor & target)
+{
+  int count = 0;
+  for (int y = 0; y < image.height(); ++y) {
+    for (int x = 0; x < image.width(); ++x) {
+      const QColor pixel = image.pixelColor(x, y);
+      if (std::abs(pixel.red() - target.red()) < 40 &&
+        std::abs(pixel.green() - target.green()) < 40 &&
+        std::abs(pixel.blue() - target.blue()) < 40)
+      {
+        ++count;
+      }
+    }
+  }
+  return count;
+}
+
+RenderableSeries horizontalSeries()
+{
+  RenderableSeries series;
+  series.label = "Styled";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{5.0, 0.0}, {10.0, 0.0}};
+  return series;
 }
 
 }  // namespace
@@ -100,4 +127,58 @@ TEST(Plot2DRenderer, DrawsSeriesSamples)
 
   EXPECT_TRUE(hasDifferentPixel(image, settings.background_color));
   EXPECT_NE(image.pixelColor(1, 1), QColor(Qt::transparent));
+}
+
+TEST(Plot2DRenderer, AppliesConfiguredLineWidth)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries thin = horizontalSeries();
+  thin.line_width = 1.0;
+  RenderableSeries thick = horizontalSeries();
+  thick.line_width = 7.0;
+
+  const QImage thin_image = renderer.render(settings, {thin});
+  const QImage thick_image = renderer.render(settings, {thick});
+
+  EXPECT_GT(
+    countPixelsCloseTo(thick_image, QColor(250, 40, 40)),
+    countPixelsCloseTo(thin_image, QColor(250, 40, 40)) * 2);
+}
+
+TEST(Plot2DRenderer, AppliesConfiguredDashLineStyle)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries solid = horizontalSeries();
+  solid.line_width = 3.0;
+  solid.line_style = LineStyle::Solid;
+  RenderableSeries dash = horizontalSeries();
+  dash.line_width = 3.0;
+  dash.line_style = LineStyle::Dash;
+
+  const QImage solid_image = renderer.render(settings, {solid});
+  const QImage dash_image = renderer.render(settings, {dash});
+
+  EXPECT_LT(
+    countPixelsCloseTo(dash_image, QColor(250, 40, 40)),
+    countPixelsCloseTo(solid_image, QColor(250, 40, 40)));
 }

@@ -13,6 +13,14 @@
 namespace rviz_2d_plot_plugin
 {
 
+enum class LineStyle
+{
+  Solid,
+  Dash,
+  Dot,
+  DashDot,
+};
+
 enum class AxisScaleMode
 {
   Auto,
@@ -49,12 +57,27 @@ struct LayoutConfig
   void repair();
 };
 
+struct SeriesColor
+{
+  int red{80};
+  int green{170};
+  int blue{255};
+
+  void repair();
+};
+
 struct SeriesConfig
 {
   bool enabled{true};
   std::string topic;
   std::string field;
   std::string label{"Series"};
+  SeriesColor color;
+  double line_width{2.0};
+  double line_alpha{1.0};
+  LineStyle line_style{LineStyle::Solid};
+
+  void repair();
 };
 
 struct Plot2DConfig

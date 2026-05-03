@@ -86,6 +86,21 @@ std::string formatValue(const double value)
   return stream.str();
 }
 
+Qt::PenStyle qtPenStyle(const LineStyle style)
+{
+  switch (style) {
+    case LineStyle::Solid:
+      return Qt::SolidLine;
+    case LineStyle::Dash:
+      return Qt::DashLine;
+    case LineStyle::Dot:
+      return Qt::DotLine;
+    case LineStyle::DashDot:
+      return Qt::DashDotLine;
+  }
+  return Qt::SolidLine;
+}
+
 void drawGrid(
   QPainter & painter,
   const QRectF & rect,
@@ -160,7 +175,13 @@ void drawSeries(
     return;
   }
 
-  painter.setPen(QPen(series.color, 2.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  painter.setPen(
+    QPen(
+      series.color,
+      std::max(1.0, series.line_width),
+      qtPenStyle(series.line_style),
+      Qt::RoundCap,
+      Qt::RoundJoin));
   painter.drawPath(path);
 }
 

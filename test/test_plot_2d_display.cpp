@@ -240,6 +240,10 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(series, "Topic"));
   EXPECT_NE(nullptr, findChild(series, "Field"));
   EXPECT_NE(nullptr, findChild(series, "Label"));
+  EXPECT_NE(nullptr, findChild(series, "Color"));
+  EXPECT_NE(nullptr, findChild(series, "Line Width"));
+  EXPECT_NE(nullptr, findChild(series, "Line Alpha"));
+  EXPECT_NE(nullptr, findChild(series, "Line Style"));
 
   auto * time = Plot2DDisplayTestAccessor::timeRoot(display);
   EXPECT_NE(nullptr, findChild(time, "Window Seconds"));
@@ -332,6 +336,10 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(series, "Topic")->setValue("/cmd_vel_out");
   findChild(series, "Field")->setValue("linear/x");
   findChild(series, "Label")->setValue("Linear X");
+  findChild(series, "Color")->setValue(QColor(255, 80, 20));
+  findChild(series, "Line Width")->setValue(3.5);
+  findChild(series, "Line Alpha")->setValue(0.45);
+  findChild(series, "Line Style")->setValue("Dash");
   findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Window Seconds")->setValue(45.0);
   findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Refresh Rate")->setValue(12.0);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale")->setValue(false);
@@ -349,6 +357,12 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.series[0].topic, "/cmd_vel_out");
   EXPECT_EQ(config.series[0].field, "linear/x");
   EXPECT_EQ(config.series[0].label, "Linear X");
+  EXPECT_EQ(config.series[0].color.red, 255);
+  EXPECT_EQ(config.series[0].color.green, 80);
+  EXPECT_EQ(config.series[0].color.blue, 20);
+  EXPECT_DOUBLE_EQ(config.series[0].line_width, 3.5);
+  EXPECT_NEAR(config.series[0].line_alpha, 0.45, 1e-6);
+  EXPECT_EQ(config.series[0].line_style, rviz_2d_plot_plugin::LineStyle::Dash);
   EXPECT_EQ(config.time.window_seconds, 45.0);
   EXPECT_EQ(config.time.refresh_rate_hz, 12.0);
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Fixed);
@@ -358,6 +372,36 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.layout.height, 180);
   EXPECT_EQ(config.layout.x_offset, 20);
   EXPECT_EQ(config.layout.y_offset, 30);
+}
+
+TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_count =
+    findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(3);
+  auto * series_1 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  auto * series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  auto * series_3 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+
+  auto * color_1 =
+    dynamic_cast<rviz_common::properties::ColorProperty *>(findChild(series_1, "Color"));
+  auto * color_2 =
+    dynamic_cast<rviz_common::properties::ColorProperty *>(findChild(series_2, "Color"));
+  auto * color_3 =
+    dynamic_cast<rviz_common::properties::ColorProperty *>(findChild(series_3, "Color"));
+  ASSERT_NE(nullptr, color_1);
+  ASSERT_NE(nullptr, color_2);
+  ASSERT_NE(nullptr, color_3);
+
+  EXPECT_NE(color_1->getColor(), color_2->getColor());
+  EXPECT_NE(color_2->getColor(), color_3->getColor());
 }
 
 TEST(Plot2DDisplay, BuildsPlotConfigFromMultipleSeriesProperties)

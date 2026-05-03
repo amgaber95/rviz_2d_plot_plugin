@@ -29,6 +29,7 @@ namespace properties
 class BoolProperty;
 class ColorProperty;
 class EditableEnumProperty;
+class EnumProperty;
 class FloatProperty;
 class IntProperty;
 class Property;
@@ -107,6 +108,10 @@ private:
     rviz_common::properties::EditableEnumProperty * topic{nullptr};
     rviz_common::properties::EditableEnumProperty * field{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
+    rviz_common::properties::ColorProperty * color{nullptr};
+    rviz_common::properties::FloatProperty * line_width{nullptr};
+    rviz_common::properties::FloatProperty * line_alpha{nullptr};
+    rviz_common::properties::EnumProperty * line_style{nullptr};
   };
 
   std::vector<SeriesConfig> seriesConfigFromProperties_() const;

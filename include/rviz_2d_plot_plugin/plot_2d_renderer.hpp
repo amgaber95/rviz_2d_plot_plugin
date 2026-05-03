@@ -25,6 +25,8 @@ struct RenderableSeries
   QColor color{80, 170, 255};
   std::vector<PlotSample> samples;
   bool enabled{true};
+  double line_width{2.0};
+  LineStyle line_style{LineStyle::Solid};
 };
 
 struct PlotRenderSettings

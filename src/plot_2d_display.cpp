@@ -25,6 +25,7 @@
 #include <rviz_common/properties/bool_property.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/editable_enum_property.hpp>
+#include <rviz_common/properties/enum_property.hpp>
 #include <rviz_common/properties/float_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
 #include <rviz_common/properties/property.hpp>
@@ -68,6 +69,71 @@ std::string statusText(const Plot2DControllerState & state)
     return "OK";
   }
   return "Waiting for a topic and field selection";
+}
+
+SeriesColor defaultSeriesColor(const std::size_t index)
+{
+  static const std::vector<SeriesColor> palette{
+    SeriesColor{80, 170, 255},
+    SeriesColor{80, 220, 130},
+    SeriesColor{255, 170, 60},
+    SeriesColor{210, 130, 255},
+    SeriesColor{255, 90, 90},
+    SeriesColor{120, 220, 255},
+    SeriesColor{230, 230, 90},
+    SeriesColor{160, 160, 255},
+  };
+  return palette[index % palette.size()];
+}
+
+QColor toQColor(const SeriesColor & color)
+{
+  return QColor(color.red, color.green, color.blue);
+}
+
+SeriesColor toSeriesColor(const QColor & color)
+{
+  return SeriesColor{color.red(), color.green(), color.blue()};
+}
+
+std::string lineStyleName(const LineStyle style)
+{
+  switch (style) {
+    case LineStyle::Solid:
+      return "Solid";
+    case LineStyle::Dash:
+      return "Dash";
+    case LineStyle::Dot:
+      return "Dot";
+    case LineStyle::DashDot:
+      return "Dash Dot";
+  }
+  return "Solid";
+}
+
+LineStyle lineStyleFromName(const std::string & name)
+{
+  if (name == "Dash") {
+    return LineStyle::Dash;
+  }
+  if (name == "Dot") {
+    return LineStyle::Dot;
+  }
+  if (name == "Dash Dot") {
+    return LineStyle::DashDot;
+  }
+  return LineStyle::Solid;
+}
+
+void addLineStyleOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(lineStyleName(LineStyle::Solid));
+  property->addOptionStd(lineStyleName(LineStyle::Dash));
+  property->addOptionStd(lineStyleName(LineStyle::Dot));
+  property->addOptionStd(lineStyleName(LineStyle::DashDot));
 }
 
 }  // namespace
@@ -305,6 +371,12 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.topic = properties.topic ? properties.topic->getStdString() : "";
     config.field = properties.field ? properties.field->getStdString() : "";
     config.label = properties.label ? properties.label->getStdString() : "Series";
+    config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
+      defaultSeriesColor(series.size());
+    config.line_width = properties.line_width ? properties.line_width->getFloat() : 2.0;
+    config.line_alpha = properties.line_alpha ? properties.line_alpha->getFloat() : 1.0;
+    config.line_style = properties.line_style ?
+      lineStyleFromName(properties.line_style->getStdString()) : LineStyle::Solid;
     series.push_back(std::move(config));
   }
   return series;
@@ -351,6 +423,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       value = values[static_cast<std::size_t>(i)];
     } else {
       value.label = "Series " + std::to_string(i + 1);
+      value.color = defaultSeriesColor(static_cast<std::size_t>(i));
     }
 
     SeriesPropertySet properties;
@@ -380,6 +453,22 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     properties.label = new rviz_common::properties::StringProperty(
       "Label", QString::fromStdString(value.label), "Legend label for this series.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.color = new rviz_common::properties::ColorProperty(
+      "Color", toQColor(value.color), "Series line color.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.line_width = new rviz_common::properties::FloatProperty(
+      "Line Width", value.line_width, "Series line width in pixels.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.line_width->setMin(1.0F);
+    properties.line_alpha = new rviz_common::properties::FloatProperty(
+      "Line Alpha", value.line_alpha, "Series line opacity from 0 to 1.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.line_alpha->setMin(0.0F);
+    properties.line_alpha->setMax(1.0F);
+    properties.line_style = new rviz_common::properties::EnumProperty(
+      "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
+      "Series line pattern.", properties.root, SLOT(onConfigPropertyChanged()), this);
+    addLineStyleOptions(properties.line_style);
     series_properties_.push_back(properties);
   }
 }
@@ -512,6 +601,12 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
     series.label = source.label.empty() ? "Series" : source.label;
     series.enabled = source.status == PlotControllerStatus::Ok &&
       i < config.series.size() && config.series[i].enabled;
+    if (i < config.series.size()) {
+      series.color = toQColor(config.series[i].color);
+      series.color.setAlphaF(config.series[i].line_alpha);
+      series.line_width = config.series[i].line_width;
+      series.line_style = config.series[i].line_style;
+    }
     series.samples = source.samples.samples();
     output.push_back(std::move(series));
   }

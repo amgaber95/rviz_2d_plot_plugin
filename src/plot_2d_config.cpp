@@ -45,10 +45,33 @@ void LayoutConfig::repair()
   height = std::max(height, 80);
 }
 
+void SeriesColor::repair()
+{
+  red = std::clamp(red, 0, 255);
+  green = std::clamp(green, 0, 255);
+  blue = std::clamp(blue, 0, 255);
+}
+
+void SeriesConfig::repair()
+{
+  color.repair();
+  if (!std::isfinite(line_width) || line_width < 1.0) {
+    line_width = 1.0;
+  }
+  if (!std::isfinite(line_alpha)) {
+    line_alpha = 1.0;
+  }
+  line_alpha = std::clamp(line_alpha, 0.0, 1.0);
+}
+
 void Plot2DConfig::repair()
 {
   if (series.empty()) {
     series.emplace_back();
+  }
+
+  for (SeriesConfig & item : series) {
+    item.repair();
   }
 
   y_axis.repairFixedRange();

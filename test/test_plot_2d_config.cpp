@@ -10,6 +10,7 @@
 
 using rviz_2d_plot_plugin::AxisConfig;
 using rviz_2d_plot_plugin::AxisScaleMode;
+using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
@@ -21,6 +22,12 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_EQ(config.series.front().topic, "");
   EXPECT_EQ(config.series.front().field, "");
   EXPECT_EQ(config.series.front().label, "Series");
+  EXPECT_EQ(config.series.front().color.red, 80);
+  EXPECT_EQ(config.series.front().color.green, 170);
+  EXPECT_EQ(config.series.front().color.blue, 255);
+  EXPECT_DOUBLE_EQ(config.series.front().line_width, 2.0);
+  EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
+  EXPECT_EQ(config.series.front().line_style, LineStyle::Solid);
 
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Auto);
   EXPECT_DOUBLE_EQ(config.y_axis.fixed_min, -1.0);
@@ -65,4 +72,22 @@ TEST(Plot2DConfig, RepairsInvalidTimeAndLayoutValues)
   EXPECT_DOUBLE_EQ(config.time.refresh_rate_hz, 20.0);
   EXPECT_EQ(config.layout.width, 120);
   EXPECT_EQ(config.layout.height, 80);
+}
+
+TEST(Plot2DConfig, RepairsInvalidSeriesAppearanceValues)
+{
+  Plot2DConfig config;
+  config.series.front().color.red = -4;
+  config.series.front().color.green = 300;
+  config.series.front().color.blue = 120;
+  config.series.front().line_width = -2.0;
+  config.series.front().line_alpha = 2.0;
+
+  config.repair();
+
+  EXPECT_EQ(config.series.front().color.red, 0);
+  EXPECT_EQ(config.series.front().color.green, 255);
+  EXPECT_EQ(config.series.front().color.blue, 120);
+  EXPECT_DOUBLE_EQ(config.series.front().line_width, 1.0);
+  EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
 }
