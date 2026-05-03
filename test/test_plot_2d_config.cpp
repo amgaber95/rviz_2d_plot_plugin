@@ -13,6 +13,7 @@
 using rviz_2d_plot_plugin::AxisConfig;
 using rviz_2d_plot_plugin::AxisScaleMode;
 using rviz_2d_plot_plugin::LineStyle;
+using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
@@ -30,6 +31,7 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_DOUBLE_EQ(config.series.front().line_width, 2.0);
   EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
   EXPECT_EQ(config.series.front().line_style, LineStyle::Solid);
+  EXPECT_EQ(config.series.front().plot_style, PlotStyle::Line);
   EXPECT_DOUBLE_EQ(config.series.front().value_scale, 1.0);
   EXPECT_DOUBLE_EQ(config.series.front().value_offset, 0.0);
 

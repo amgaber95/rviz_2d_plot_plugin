@@ -112,6 +112,7 @@ private:
     rviz_common::properties::FloatProperty * line_width{nullptr};
     rviz_common::properties::FloatProperty * line_alpha{nullptr};
     rviz_common::properties::EnumProperty * line_style{nullptr};
+    rviz_common::properties::EnumProperty * plot_style{nullptr};
     rviz_common::properties::FloatProperty * value_scale{nullptr};
     rviz_common::properties::FloatProperty * value_offset{nullptr};
   };

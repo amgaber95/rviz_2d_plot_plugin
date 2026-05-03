@@ -27,6 +27,7 @@ struct RenderableSeries
   bool enabled{true};
   double line_width{2.0};
   LineStyle line_style{LineStyle::Solid};
+  PlotStyle plot_style{PlotStyle::Line};
 };
 
 struct PlotRenderSettings

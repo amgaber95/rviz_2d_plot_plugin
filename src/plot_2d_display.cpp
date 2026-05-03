@@ -136,6 +136,40 @@ void addLineStyleOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(lineStyleName(LineStyle::DashDot));
 }
 
+std::string plotStyleName(const PlotStyle style)
+{
+  switch (style) {
+    case PlotStyle::Line:
+      return "Line";
+    case PlotStyle::Step:
+      return "Step";
+    case PlotStyle::Points:
+      return "Points";
+  }
+  return "Line";
+}
+
+PlotStyle plotStyleFromName(const std::string & name)
+{
+  if (name == "Step") {
+    return PlotStyle::Step;
+  }
+  if (name == "Points") {
+    return PlotStyle::Points;
+  }
+  return PlotStyle::Line;
+}
+
+void addPlotStyleOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(plotStyleName(PlotStyle::Line));
+  property->addOptionStd(plotStyleName(PlotStyle::Step));
+  property->addOptionStd(plotStyleName(PlotStyle::Points));
+}
+
 }  // namespace
 
 Plot2DDisplay::Plot2DDisplay()
@@ -377,6 +411,8 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.line_alpha = properties.line_alpha ? properties.line_alpha->getFloat() : 1.0;
     config.line_style = properties.line_style ?
       lineStyleFromName(properties.line_style->getStdString()) : LineStyle::Solid;
+    config.plot_style = properties.plot_style ?
+      plotStyleFromName(properties.plot_style->getStdString()) : PlotStyle::Line;
     config.value_scale = properties.value_scale ? properties.value_scale->getFloat() : 1.0;
     config.value_offset = properties.value_offset ? properties.value_offset->getFloat() : 0.0;
     series.push_back(std::move(config));
@@ -471,6 +507,10 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
       "Series line pattern.", properties.root, SLOT(onConfigPropertyChanged()), this);
     addLineStyleOptions(properties.line_style);
+    properties.plot_style = new rviz_common::properties::EnumProperty(
+      "Plot Style", QString::fromStdString(plotStyleName(value.plot_style)),
+      "Series rendering mode.", properties.root, SLOT(onConfigPropertyChanged()), this);
+    addPlotStyleOptions(properties.plot_style);
     properties.value_scale = new rviz_common::properties::FloatProperty(
       "Value Scale", value.value_scale, "Scale applied to extracted values before plotting.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
@@ -614,6 +654,7 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
       series.color.setAlphaF(config.series[i].line_alpha);
       series.line_width = config.series[i].line_width;
       series.line_style = config.series[i].line_style;
+      series.plot_style = config.series[i].plot_style;
     }
     series.samples = source.samples.samples();
     output.push_back(std::move(series));

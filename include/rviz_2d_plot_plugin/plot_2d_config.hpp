@@ -21,6 +21,13 @@ enum class LineStyle
   DashDot,
 };
 
+enum class PlotStyle
+{
+  Line,
+  Step,
+  Points,
+};
+
 enum class AxisScaleMode
 {
   Auto,
@@ -76,6 +83,7 @@ struct SeriesConfig
   double line_width{2.0};
   double line_alpha{1.0};
   LineStyle line_style{LineStyle::Solid};
+  PlotStyle plot_style{PlotStyle::Line};
   double value_scale{1.0};
   double value_offset{0.0};
 

@@ -154,34 +154,47 @@ void drawSeries(
     return;
   }
 
-  QPainterPath path;
-  bool has_point = false;
+  QPen pen(
+    series.color,
+    std::max(1.0, series.line_width),
+    qtPenStyle(series.line_style),
+    Qt::RoundCap,
+    Qt::RoundJoin);
+  painter.setPen(pen);
+
+  std::vector<QPointF> points;
   for (const PlotSample & sample : series.samples) {
     if (sample.time < x_range.min || sample.time > x_range.max) {
       continue;
     }
-    const QPointF point(
+    points.emplace_back(
       mapX(rect, x_range, sample.time),
       mapY(rect, y_range, sample.value));
-    if (!has_point) {
-      path.moveTo(point);
-      has_point = true;
-    } else {
-      path.lineTo(point);
-    }
   }
 
-  if (!has_point) {
+  if (points.empty()) {
     return;
   }
 
-  painter.setPen(
-    QPen(
-      series.color,
-      std::max(1.0, series.line_width),
-      qtPenStyle(series.line_style),
-      Qt::RoundCap,
-      Qt::RoundJoin));
+  if (series.plot_style == PlotStyle::Points) {
+    painter.setBrush(series.color);
+    const double radius = std::max(2.0, series.line_width * 1.5);
+    for (const QPointF & point : points) {
+      painter.drawEllipse(point, radius, radius);
+    }
+    painter.setBrush(Qt::NoBrush);
+    return;
+  }
+
+  QPainterPath path;
+  path.moveTo(points.front());
+  for (std::size_t i = 1; i < points.size(); ++i) {
+    if (series.plot_style == PlotStyle::Step) {
+      path.lineTo(QPointF(points[i].x(), points[i - 1].y()));
+    }
+    path.lineTo(points[i]);
+  }
+
   painter.drawPath(path);
 }
 

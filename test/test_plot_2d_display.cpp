@@ -244,6 +244,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(series, "Line Width"));
   EXPECT_NE(nullptr, findChild(series, "Line Alpha"));
   EXPECT_NE(nullptr, findChild(series, "Line Style"));
+  EXPECT_NE(nullptr, findChild(series, "Plot Style"));
   EXPECT_NE(nullptr, findChild(series, "Value Scale"));
   EXPECT_NE(nullptr, findChild(series, "Value Offset"));
 
@@ -342,6 +343,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(series, "Line Width")->setValue(3.5);
   findChild(series, "Line Alpha")->setValue(0.45);
   findChild(series, "Line Style")->setValue("Dash");
+  findChild(series, "Plot Style")->setValue("Step");
   findChild(series, "Value Scale")->setValue(2.5);
   findChild(series, "Value Offset")->setValue(-0.75);
   findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Window Seconds")->setValue(45.0);
@@ -367,6 +369,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_DOUBLE_EQ(config.series[0].line_width, 3.5);
   EXPECT_NEAR(config.series[0].line_alpha, 0.45, 1e-6);
   EXPECT_EQ(config.series[0].line_style, rviz_2d_plot_plugin::LineStyle::Dash);
+  EXPECT_EQ(config.series[0].plot_style, rviz_2d_plot_plugin::PlotStyle::Step);
   EXPECT_DOUBLE_EQ(config.series[0].value_scale, 2.5);
   EXPECT_DOUBLE_EQ(config.series[0].value_offset, -0.75);
   EXPECT_EQ(config.time.window_seconds, 45.0);

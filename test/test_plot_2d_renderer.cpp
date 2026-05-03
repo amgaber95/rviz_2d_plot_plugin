@@ -18,6 +18,7 @@
 using rviz_2d_plot_plugin::Plot2DRenderer;
 using rviz_2d_plot_plugin::PlotRenderSettings;
 using rviz_2d_plot_plugin::PlotSample;
+using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::RenderableSeries;
 using rviz_2d_plot_plugin::LineStyle;
 
@@ -181,4 +182,56 @@ TEST(Plot2DRenderer, AppliesConfiguredDashLineStyle)
   EXPECT_LT(
     countPixelsCloseTo(dash_image, QColor(250, 40, 40)),
     countPixelsCloseTo(solid_image, QColor(250, 40, 40)));
+}
+
+TEST(Plot2DRenderer, PointsStyleDrawsSingleSample)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries series;
+  series.label = "Point";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{8.0, 0.0}};
+  series.plot_style = PlotStyle::Points;
+
+  const QImage image = renderer.render(settings, {series});
+
+  EXPECT_GT(countPixelsCloseTo(image, QColor(250, 40, 40)), 0);
+}
+
+TEST(Plot2DRenderer, StepStyleDrawsMoreOrthogonalSegmentsThanLineStyle)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries line = horizontalSeries();
+  line.samples = std::vector<PlotSample>{{5.0, -0.7}, {10.0, 0.7}};
+  line.line_width = 2.0;
+  line.plot_style = PlotStyle::Line;
+  RenderableSeries step = line;
+  step.plot_style = PlotStyle::Step;
+
+  const QImage line_image = renderer.render(settings, {line});
+  const QImage step_image = renderer.render(settings, {step});
+
+  EXPECT_GT(
+    countPixelsCloseTo(step_image, QColor(250, 40, 40)),
+    countPixelsCloseTo(line_image, QColor(250, 40, 40)));
 }
