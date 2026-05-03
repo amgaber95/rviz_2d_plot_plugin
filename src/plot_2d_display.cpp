@@ -450,9 +450,6 @@ void Plot2DDisplay::onSerializedMessage_(
   }
   updateStatusFromController_();
   renderOverlay_();
-  if (context_) {
-    context_->queueRender();
-  }
 }
 
 void Plot2DDisplay::updateStatusFromController_()
@@ -530,6 +527,9 @@ void Plot2DDisplay::renderOverlay_()
   }
 
   updateOverlayGeometry_();
+  if (isEnabled()) {
+    overlay_->show();
+  }
   if (!overlay_->isTextureReady()) {
     return;
   }
@@ -542,8 +542,14 @@ void Plot2DDisplay::renderOverlay_()
     static_cast<unsigned int>(settings.width),
     static_cast<unsigned int>(settings.height),
     clear_color);
-  QPainter painter(&target);
-  painter.drawImage(0, 0, rendered);
+  {
+    QPainter painter(&target);
+    painter.drawImage(0, 0, rendered);
+  }
+
+  if (context_) {
+    context_->queueRender();
+  }
 }
 
 void Plot2DDisplay::unsubscribe_()
