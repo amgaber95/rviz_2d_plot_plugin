@@ -14,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
@@ -80,6 +81,11 @@ public:
       [topics]() {
         return topics;
       };
+  }
+
+  static void setTopicProvider(Plot2DDisplay & display, std::function<TopicTypeMap()> provider)
+  {
+    display.ros_graph_ops_.get_topic_names_and_types = std::move(provider);
   }
 
   static void setSubscriptionFactory(
@@ -510,6 +516,28 @@ TEST(Plot2DDisplay, TopicOptionsListVisibleTopicsSortedByName)
     "/zed/odom",
   };
   EXPECT_EQ(options, expected);
+}
+
+TEST(Plot2DDisplay, TopicGraphFailuresDoNotEscapeDisplayQueries)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopicProvider(
+    display,
+    []() -> TopicTypeMap {
+      throw std::runtime_error("context is invalid");
+    });
+
+  EXPECT_NO_THROW(Plot2DDisplayTestAccessor::resolveAndSubscribe(display));
+  EXPECT_TRUE(Plot2DDisplayTestAccessor::topicOptions(display).empty());
+  EXPECT_TRUE(Plot2DDisplayTestAccessor::fieldOptions(display, "/value").empty());
+  EXPECT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).status,
+    PlotControllerStatus::WaitingForTopic);
 }
 
 TEST(Plot2DDisplay, FieldOptionsListNumericScalarsForSelectedTopic)

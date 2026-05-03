@@ -117,6 +117,7 @@ private:
   void renderOverlay_();
   void unsubscribe_();
   double receiveNowSeconds_() const;
+  TopicTypeMap topicNamesAndTypes_() const;
   std::vector<std::string> topicOptions_() const;
   std::vector<std::string> fieldOptionsForTopic_(const std::string & topic) const;
 

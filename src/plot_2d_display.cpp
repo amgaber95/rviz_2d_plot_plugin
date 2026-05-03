@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <sstream>
 #include <utility>
 
@@ -152,6 +153,10 @@ void Plot2DDisplay::onInitialize()
 
   if (node_) {
     ros_graph_ops_.get_topic_names_and_types = [this]() {
+        const auto context = node_->get_node_base_interface()->get_context();
+        if (!context || !context->is_valid()) {
+          return TopicTypeMap{};
+        }
         return node_->get_topic_names_and_types();
       };
     subscription_factory_.create_generic_subscription =
@@ -382,8 +387,7 @@ const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField
 
 void Plot2DDisplay::resolveAndSubscribe_()
 {
-  const TopicTypeMap topics = ros_graph_ops_.get_topic_names_and_types ?
-    ros_graph_ops_.get_topic_names_and_types() : TopicTypeMap{};
+  const TopicTypeMap topics = topicNamesAndTypes_();
   const Plot2DConfig config = configFromProperties_();
 
   std::lock_guard<std::mutex> lock(controller_mutex_);
@@ -565,10 +569,24 @@ double Plot2DDisplay::receiveNowSeconds_() const
   return rclcpp::Clock().now().seconds();
 }
 
+TopicTypeMap Plot2DDisplay::topicNamesAndTypes_() const
+{
+  if (!ros_graph_ops_.get_topic_names_and_types) {
+    return {};
+  }
+
+  try {
+    return ros_graph_ops_.get_topic_names_and_types();
+  } catch (const std::exception &) {
+    return {};
+  } catch (...) {
+    return {};
+  }
+}
+
 std::vector<std::string> Plot2DDisplay::topicOptions_() const
 {
-  const TopicTypeMap topics = ros_graph_ops_.get_topic_names_and_types ?
-    ros_graph_ops_.get_topic_names_and_types() : TopicTypeMap{};
+  const TopicTypeMap topics = topicNamesAndTypes_();
 
   std::vector<std::string> options;
   options.reserve(topics.size());
@@ -583,8 +601,7 @@ std::vector<std::string> Plot2DDisplay::topicOptions_() const
 std::vector<std::string> Plot2DDisplay::fieldOptionsForTopic_(
   const std::string & topic) const
 {
-  const TopicTypeMap topics = ros_graph_ops_.get_topic_names_and_types ?
-    ros_graph_ops_.get_topic_names_and_types() : TopicTypeMap{};
+  const TopicTypeMap topics = topicNamesAndTypes_();
   const auto topic_it = topics.find(topic);
   if (topic_it == topics.end() || topic_it->second.size() != 1U) {
     return {};
