@@ -166,3 +166,39 @@ TEST(Plot2DController, ClearsHistoryWithoutReconfiguring)
   EXPECT_FALSE(controller.state().series[0].latest_value.has_value());
   EXPECT_EQ(controller.state().status, PlotControllerStatus::Ok);
 }
+
+TEST(Plot2DController, ReconfigurePreservesSamplesForUnchangedSeriesSource)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5), 10.0));
+
+  config.series[0].label = "Styled Linear X";
+  config.series[0].line_width = 4.0;
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_EQ(controller.state().series[0].label, "Styled Linear X");
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 1.5);
+  ASSERT_TRUE(controller.state().series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 1.5);
+}
+
+TEST(Plot2DController, ReconfigureDropsSamplesWhenSeriesSourceChanges)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5), 10.0));
+
+  config.series[0].field = "angular/z";
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
+  EXPECT_FALSE(controller.state().series[0].latest_value.has_value());
+}

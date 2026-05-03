@@ -62,6 +62,9 @@ void Plot2DController::configure(
   Plot2DConfig config,
   const TopicTypeMap & topics)
 {
+  const Plot2DConfig previous_config = config_;
+  const Plot2DControllerState previous_state = state_;
+
   config_ = std::move(config);
   config_.repair();
   state_ = Plot2DControllerState{};
@@ -105,6 +108,17 @@ void Plot2DController::configure(
     }
 
     series_state.status = PlotControllerStatus::Ok;
+    const std::size_t series_index = state_.series.size();
+    if (series_index < previous_config.series.size() &&
+      series_index < previous_state.series.size() &&
+      previous_state.series[series_index].status == PlotControllerStatus::Ok &&
+      previous_state.series[series_index].topic == resolution.topic &&
+      previous_state.series[series_index].type == resolution.type &&
+      previous_config.series[series_index].field == series.field)
+    {
+      series_state.samples = previous_state.series[series_index].samples;
+      series_state.latest_value = previous_state.series[series_index].latest_value;
+    }
     state_.series.push_back(std::move(series_state));
     extractors_.push_back(std::move(extractor));
   }
