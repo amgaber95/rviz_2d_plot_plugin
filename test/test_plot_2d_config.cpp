@@ -6,6 +6,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "rviz_2d_plot_plugin/plot_2d_config.hpp"
 
 using rviz_2d_plot_plugin::AxisConfig;
@@ -28,6 +30,8 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_DOUBLE_EQ(config.series.front().line_width, 2.0);
   EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
   EXPECT_EQ(config.series.front().line_style, LineStyle::Solid);
+  EXPECT_DOUBLE_EQ(config.series.front().value_scale, 1.0);
+  EXPECT_DOUBLE_EQ(config.series.front().value_offset, 0.0);
 
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Auto);
   EXPECT_DOUBLE_EQ(config.y_axis.fixed_min, -1.0);
@@ -82,6 +86,8 @@ TEST(Plot2DConfig, RepairsInvalidSeriesAppearanceValues)
   config.series.front().color.blue = 120;
   config.series.front().line_width = -2.0;
   config.series.front().line_alpha = 2.0;
+  config.series.front().value_scale = std::numeric_limits<double>::infinity();
+  config.series.front().value_offset = std::numeric_limits<double>::quiet_NaN();
 
   config.repair();
 
@@ -90,4 +96,6 @@ TEST(Plot2DConfig, RepairsInvalidSeriesAppearanceValues)
   EXPECT_EQ(config.series.front().color.blue, 120);
   EXPECT_DOUBLE_EQ(config.series.front().line_width, 1.0);
   EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
+  EXPECT_DOUBLE_EQ(config.series.front().value_scale, 1.0);
+  EXPECT_DOUBLE_EQ(config.series.front().value_offset, 0.0);
 }

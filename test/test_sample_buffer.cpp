@@ -78,3 +78,26 @@ TEST(RollingSampleBuffer, ComputesValueRangeAndClearsSamples)
   EXPECT_FALSE(buffer.latest().has_value());
   EXPECT_FALSE(buffer.valueRange().has_value());
 }
+
+TEST(RollingSampleBuffer, RewritesValuesBetweenLinearTransforms)
+{
+  RollingSampleBuffer buffer;
+  buffer.append(1.0, 5.0);
+  buffer.append(2.0, 9.0);
+
+  buffer.rewriteValuesForTransformChange(2.0, 1.0, 3.0, -2.0);
+
+  ASSERT_EQ(buffer.size(), 2u);
+  EXPECT_DOUBLE_EQ(buffer.samples()[0].value, 4.0);
+  EXPECT_DOUBLE_EQ(buffer.samples()[1].value, 10.0);
+}
+
+TEST(RollingSampleBuffer, ClearsValuesWhenPreviousScaleCannotRecoverRawValues)
+{
+  RollingSampleBuffer buffer;
+  buffer.append(1.0, 5.0);
+
+  buffer.rewriteValuesForTransformChange(0.0, 5.0, 3.0, -2.0);
+
+  EXPECT_TRUE(buffer.empty());
+}

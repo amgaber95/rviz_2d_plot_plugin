@@ -62,6 +62,12 @@ void SeriesConfig::repair()
     line_alpha = 1.0;
   }
   line_alpha = std::clamp(line_alpha, 0.0, 1.0);
+  if (!std::isfinite(value_scale)) {
+    value_scale = 1.0;
+  }
+  if (!std::isfinite(value_offset)) {
+    value_offset = 0.0;
+  }
 }
 
 void Plot2DConfig::repair()

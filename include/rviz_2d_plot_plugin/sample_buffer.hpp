@@ -32,6 +32,11 @@ public:
   void append(double time, double value);
   void pruneBefore(double minimum_time);
   void pruneToWindow(double latest_time, double window_seconds);
+  void rewriteValuesForTransformChange(
+    double old_scale,
+    double old_offset,
+    double new_scale,
+    double new_offset);
   void clear();
 
   bool empty() const;

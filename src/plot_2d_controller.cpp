@@ -117,7 +117,17 @@ void Plot2DController::configure(
       previous_config.series[series_index].field == series.field)
     {
       series_state.samples = previous_state.series[series_index].samples;
+      series_state.samples.rewriteValuesForTransformChange(
+        previous_config.series[series_index].value_scale,
+        previous_config.series[series_index].value_offset,
+        series.value_scale,
+        series.value_offset);
       series_state.latest_value = previous_state.series[series_index].latest_value;
+      if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
+        series_state.latest_value = latest->value;
+      } else {
+        series_state.latest_value.reset();
+      }
     }
     state_.series.push_back(std::move(series_state));
     extractors_.push_back(std::move(extractor));
@@ -151,9 +161,11 @@ bool Plot2DController::appendSerializedMessage(
       continue;
     }
 
-    series.samples.append(receive_time, result.value.value());
+    const double transformed_value =
+      result.value.value() * config_.series[i].value_scale + config_.series[i].value_offset;
+    series.samples.append(receive_time, transformed_value);
     series.samples.pruneToWindow(receive_time, config_.time.window_seconds);
-    series.latest_value = result.value;
+    series.latest_value = transformed_value;
     appended = true;
   }
 

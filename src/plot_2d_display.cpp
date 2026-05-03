@@ -377,6 +377,8 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.line_alpha = properties.line_alpha ? properties.line_alpha->getFloat() : 1.0;
     config.line_style = properties.line_style ?
       lineStyleFromName(properties.line_style->getStdString()) : LineStyle::Solid;
+    config.value_scale = properties.value_scale ? properties.value_scale->getFloat() : 1.0;
+    config.value_offset = properties.value_offset ? properties.value_offset->getFloat() : 0.0;
     series.push_back(std::move(config));
   }
   return series;
@@ -469,6 +471,12 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
       "Series line pattern.", properties.root, SLOT(onConfigPropertyChanged()), this);
     addLineStyleOptions(properties.line_style);
+    properties.value_scale = new rviz_common::properties::FloatProperty(
+      "Value Scale", value.value_scale, "Scale applied to extracted values before plotting.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.value_offset = new rviz_common::properties::FloatProperty(
+      "Value Offset", value.value_offset, "Offset added after scaling extracted values.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
     series_properties_.push_back(properties);
   }
 }

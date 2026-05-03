@@ -7,6 +7,7 @@
 #include "rviz_2d_plot_plugin/sample_buffer.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace rviz_2d_plot_plugin
 {
@@ -29,6 +30,26 @@ void RollingSampleBuffer::pruneBefore(const double minimum_time)
 void RollingSampleBuffer::pruneToWindow(const double latest_time, const double window_seconds)
 {
   pruneBefore(latest_time - std::max(window_seconds, 0.0));
+}
+
+void RollingSampleBuffer::rewriteValuesForTransformChange(
+  const double old_scale,
+  const double old_offset,
+  const double new_scale,
+  const double new_offset)
+{
+  if (!std::isfinite(old_scale) || !std::isfinite(old_offset) ||
+    !std::isfinite(new_scale) || !std::isfinite(new_offset) ||
+    old_scale == 0.0)
+  {
+    clear();
+    return;
+  }
+
+  for (PlotSample & sample : samples_) {
+    const double raw_value = (sample.value - old_offset) / old_scale;
+    sample.value = raw_value * new_scale + new_offset;
+  }
 }
 
 void RollingSampleBuffer::clear()

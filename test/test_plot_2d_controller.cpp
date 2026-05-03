@@ -78,6 +78,44 @@ TEST(Plot2DController, AppendsExtractedSamplesAndPrunesToWindow)
   EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 2.5);
 }
 
+TEST(Plot2DController, AppliesSeriesScaleAndOffsetToExtractedSamples)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.series[0].value_scale = 3.0;
+  config.series[0].value_offset = -1.0;
+  controller.configure(config, topics);
+
+  EXPECT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(2.0), 10.0));
+
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 5.0);
+  ASSERT_TRUE(controller.state().series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 5.0);
+}
+
+TEST(Plot2DController, ReconfigureRewritesPreservedSamplesForTransformChange)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.series[0].value_scale = 2.0;
+  config.series[0].value_offset = 1.0;
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(2.0), 10.0));
+  ASSERT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 5.0);
+
+  config.series[0].value_scale = 3.0;
+  config.series[0].value_offset = -2.0;
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 4.0);
+  ASSERT_TRUE(controller.state().series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 4.0);
+}
+
 TEST(Plot2DController, AppendsSamplesForMultipleConfiguredSeries)
 {
   Plot2DController controller;
