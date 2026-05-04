@@ -70,6 +70,11 @@ public:
     return display.y_axis_root_property_;
   }
 
+  static rviz_common::properties::Property * referencesRoot(Plot2DDisplay & display)
+  {
+    return display.references_root_property_;
+  }
+
   static rviz_common::properties::Property * layoutRoot(Plot2DDisplay & display)
   {
     return display.layout_root_property_;
@@ -229,6 +234,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::seriesRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::timeRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::yAxisRoot(display));
+  ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::referencesRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::layoutRoot(display));
   EXPECT_EQ(findChild(&display, "Pause Plot"), Plot2DDisplayTestAccessor::pausePlot(display));
   EXPECT_EQ(findChild(&display, "Clear History"), Plot2DDisplayTestAccessor::clearHistory(display));
@@ -256,6 +262,9 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(y_axis, "Auto Scale"));
   EXPECT_NE(nullptr, findChild(y_axis, "Y Min"));
   EXPECT_NE(nullptr, findChild(y_axis, "Y Max"));
+
+  auto * references = Plot2DDisplayTestAccessor::referencesRoot(display);
+  EXPECT_NE(nullptr, findChild(references, "Reference Count"));
 
   auto * layout = Plot2DDisplayTestAccessor::layoutRoot(display);
   EXPECT_NE(nullptr, findChild(layout, "Width"));
@@ -351,6 +360,17 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale")->setValue(false);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Min")->setValue(-2.0);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Max")->setValue(2.0);
+  findChild(Plot2DDisplayTestAccessor::referencesRoot(display), "Reference Count")->setValue(1);
+  auto * reference =
+    findChild(Plot2DDisplayTestAccessor::referencesRoot(display), "Reference 1");
+  ASSERT_NE(nullptr, reference);
+  findChild(reference, "Enabled")->setValue(true);
+  findChild(reference, "Value")->setValue(0.5);
+  findChild(reference, "Label")->setValue("Limit");
+  findChild(reference, "Color")->setValue(QColor(255, 180, 60));
+  findChild(reference, "Alpha")->setValue(0.6);
+  findChild(reference, "Line Width")->setValue(1.5);
+  findChild(reference, "Line Style")->setValue("Dot");
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Width")->setValue(420);
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Height")->setValue(180);
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "X Offset")->setValue(20);
@@ -377,6 +397,16 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Fixed);
   EXPECT_EQ(config.y_axis.fixed_min, -2.0);
   EXPECT_EQ(config.y_axis.fixed_max, 2.0);
+  ASSERT_EQ(config.references.size(), 1U);
+  EXPECT_TRUE(config.references[0].enabled);
+  EXPECT_DOUBLE_EQ(config.references[0].value, 0.5);
+  EXPECT_EQ(config.references[0].label, "Limit");
+  EXPECT_EQ(config.references[0].color.red, 255);
+  EXPECT_EQ(config.references[0].color.green, 180);
+  EXPECT_EQ(config.references[0].color.blue, 60);
+  EXPECT_NEAR(config.references[0].alpha, 0.6, 1e-6);
+  EXPECT_DOUBLE_EQ(config.references[0].line_width, 1.5);
+  EXPECT_EQ(config.references[0].line_style, rviz_2d_plot_plugin::LineStyle::Dot);
   EXPECT_EQ(config.layout.width, 420);
   EXPECT_EQ(config.layout.height, 180);
   EXPECT_EQ(config.layout.x_offset, 20);

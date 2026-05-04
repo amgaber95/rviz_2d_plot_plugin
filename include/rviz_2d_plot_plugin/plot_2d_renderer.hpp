@@ -30,6 +30,16 @@ struct RenderableSeries
   PlotStyle plot_style{PlotStyle::Line};
 };
 
+struct RenderableReference
+{
+  std::string label;
+  QColor color{255, 180, 60};
+  double value{0.0};
+  double line_width{1.2};
+  LineStyle line_style{LineStyle::Solid};
+  bool enabled{true};
+};
+
 struct PlotRenderSettings
 {
   int width{360};
@@ -51,7 +61,8 @@ class Plot2DRenderer
 public:
   QImage render(
     PlotRenderSettings settings,
-    const std::vector<RenderableSeries> & series) const;
+    const std::vector<RenderableSeries> & series,
+    const std::vector<RenderableReference> & references = {}) const;
 };
 
 }  // namespace rviz_2d_plot_plugin

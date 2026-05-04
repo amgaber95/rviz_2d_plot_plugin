@@ -217,6 +217,13 @@ Plot2DDisplay::Plot2DDisplay()
     "Y Max", 1.0F, "Fixed y-axis maximum when auto scale is disabled.",
     y_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
 
+  references_root_property_ = new rviz_common::properties::Property(
+    "References", QVariant(), "Horizontal reference lines.", this);
+  reference_count_property_ = new rviz_common::properties::IntProperty(
+    "Reference Count", 0, "Number of horizontal reference lines.",
+    references_root_property_, SLOT(onReferenceCountChanged()), this, 0, 12);
+  rebuildReferenceProperties_(0, {});
+
   layout_root_property_ = new rviz_common::properties::Property(
     "Layout", QVariant(), "Overlay size and screen position.", this);
   width_property_ = new rviz_common::properties::IntProperty(
@@ -349,6 +356,13 @@ void Plot2DDisplay::onSeriesCountChanged()
   onConfigPropertyChanged();
 }
 
+void Plot2DDisplay::onReferenceCountChanged()
+{
+  const std::vector<ReferenceConfig> current = referenceConfigFromProperties_();
+  rebuildReferenceProperties_(reference_count_property_->getInt(), current);
+  onConfigPropertyChanged();
+}
+
 void Plot2DDisplay::onClearHistoryChanged()
 {
   if (!clear_history_property_ || !clear_history_property_->getBool()) {
@@ -420,10 +434,31 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
   return series;
 }
 
+std::vector<ReferenceConfig> Plot2DDisplay::referenceConfigFromProperties_() const
+{
+  std::vector<ReferenceConfig> references;
+  references.reserve(reference_properties_.size());
+  for (const ReferencePropertySet & properties : reference_properties_) {
+    ReferenceConfig config;
+    config.enabled = properties.enabled && properties.enabled->getBool();
+    config.value = properties.value ? properties.value->getFloat() : 0.0;
+    config.label = properties.label ? properties.label->getStdString() : "";
+    config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
+      SeriesColor{255, 180, 60};
+    config.alpha = properties.alpha ? properties.alpha->getFloat() : 1.0;
+    config.line_width = properties.line_width ? properties.line_width->getFloat() : 1.2;
+    config.line_style = properties.line_style ?
+      lineStyleFromName(properties.line_style->getStdString()) : LineStyle::Solid;
+    references.push_back(std::move(config));
+  }
+  return references;
+}
+
 Plot2DConfig Plot2DDisplay::configFromProperties_() const
 {
   Plot2DConfig config;
   config.series = seriesConfigFromProperties_();
+  config.references = referenceConfigFromProperties_();
 
   config.time.window_seconds = window_seconds_property_->getFloat();
   config.time.refresh_rate_hz = refresh_rate_property_->getFloat();
@@ -518,6 +553,58 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       "Value Offset", value.value_offset, "Offset added after scaling extracted values.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
     series_properties_.push_back(properties);
+  }
+}
+
+void Plot2DDisplay::rebuildReferenceProperties_(
+  const int count,
+  const std::vector<ReferenceConfig> & values)
+{
+  const int repaired_count = std::clamp(count, 0, 12);
+  if (reference_count_property_->getInt() != repaired_count) {
+    reference_count_property_->setInt(repaired_count);
+  }
+
+  references_root_property_->removeChildren(1);
+  reference_properties_.clear();
+  reference_properties_.reserve(static_cast<std::size_t>(repaired_count));
+
+  for (int i = 0; i < repaired_count; ++i) {
+    ReferenceConfig value;
+    if (static_cast<std::size_t>(i) < values.size()) {
+      value = values[static_cast<std::size_t>(i)];
+    }
+
+    ReferencePropertySet properties;
+    const QString name = "Reference " + QString::number(i + 1);
+    properties.root = new rviz_common::properties::Property(
+      name, QVariant(), "Horizontal reference line.", references_root_property_);
+    properties.enabled = new rviz_common::properties::BoolProperty(
+      "Enabled", value.enabled, "Enable this reference line.", properties.root,
+      SLOT(onConfigPropertyChanged()), this);
+    properties.value = new rviz_common::properties::FloatProperty(
+      "Value", value.value, "Y-axis value for this reference line.", properties.root,
+      SLOT(onConfigPropertyChanged()), this);
+    properties.label = new rviz_common::properties::StringProperty(
+      "Label", QString::fromStdString(value.label), "Reference label.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.color = new rviz_common::properties::ColorProperty(
+      "Color", toQColor(value.color), "Reference line color.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.alpha = new rviz_common::properties::FloatProperty(
+      "Alpha", value.alpha, "Reference line opacity from 0 to 1.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.alpha->setMin(0.0F);
+    properties.alpha->setMax(1.0F);
+    properties.line_width = new rviz_common::properties::FloatProperty(
+      "Line Width", value.line_width, "Reference line width in pixels.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.line_width->setMin(1.0F);
+    properties.line_style = new rviz_common::properties::EnumProperty(
+      "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
+      "Reference line pattern.", properties.root, SLOT(onConfigPropertyChanged()), this);
+    addLineStyleOptions(properties.line_style);
+    reference_properties_.push_back(properties);
   }
 }
 
@@ -662,6 +749,26 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
   return output;
 }
 
+std::vector<RenderableReference> Plot2DDisplay::renderableReferences_() const
+{
+  const Plot2DConfig config = configFromProperties_();
+
+  std::vector<RenderableReference> output;
+  output.reserve(config.references.size());
+  for (const ReferenceConfig & source : config.references) {
+    RenderableReference reference;
+    reference.enabled = source.enabled;
+    reference.value = source.value;
+    reference.label = source.label;
+    reference.color = toQColor(source.color);
+    reference.color.setAlphaF(source.alpha);
+    reference.line_width = source.line_width;
+    reference.line_style = source.line_style;
+    output.push_back(std::move(reference));
+  }
+  return output;
+}
+
 void Plot2DDisplay::updateOverlayGeometry_()
 {
   if (!overlay_) {
@@ -693,7 +800,10 @@ void Plot2DDisplay::renderOverlay_()
   }
 
   const PlotRenderSettings settings = renderSettingsFromProperties_();
-  const QImage rendered = renderer_.render(settings, renderableSeries_());
+  const QImage rendered = renderer_.render(
+    settings,
+    renderableSeries_(),
+    renderableReferences_());
   QColor clear_color(0, 0, 0, 0);
   auto buffer = overlay_->getBuffer();
   QImage target = buffer.getQImage(

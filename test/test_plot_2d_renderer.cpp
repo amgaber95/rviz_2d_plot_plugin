@@ -19,6 +19,7 @@ using rviz_2d_plot_plugin::Plot2DRenderer;
 using rviz_2d_plot_plugin::PlotRenderSettings;
 using rviz_2d_plot_plugin::PlotSample;
 using rviz_2d_plot_plugin::PlotStyle;
+using rviz_2d_plot_plugin::RenderableReference;
 using rviz_2d_plot_plugin::RenderableSeries;
 using rviz_2d_plot_plugin::LineStyle;
 
@@ -234,4 +235,27 @@ TEST(Plot2DRenderer, StepStyleDrawsMoreOrthogonalSegmentsThanLineStyle)
   EXPECT_GT(
     countPixelsCloseTo(step_image, QColor(250, 40, 40)),
     countPixelsCloseTo(line_image, QColor(250, 40, 40)));
+}
+
+TEST(Plot2DRenderer, DrawsEnabledReferenceLines)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableReference reference;
+  reference.value = 0.0;
+  reference.color = QColor(255, 180, 60);
+  reference.line_width = 3.0;
+
+  const QImage image = renderer.render(settings, {}, {reference});
+
+  EXPECT_GT(countPixelsCloseTo(image, QColor(255, 180, 60)), 0);
 }

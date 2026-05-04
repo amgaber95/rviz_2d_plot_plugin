@@ -198,6 +198,38 @@ void drawSeries(
   painter.drawPath(path);
 }
 
+void drawReferences(
+  QPainter & painter,
+  const QRectF & rect,
+  const PlotRange & y_range,
+  const std::vector<RenderableReference> & references,
+  const PlotRenderSettings & settings)
+{
+  for (const RenderableReference & reference : references) {
+    if (!reference.enabled || reference.value < y_range.min || reference.value > y_range.max) {
+      continue;
+    }
+
+    const double y = mapY(rect, y_range, reference.value);
+    painter.setPen(
+      QPen(
+        reference.color,
+        std::max(1.0, reference.line_width),
+        qtPenStyle(reference.line_style),
+        Qt::RoundCap,
+        Qt::RoundJoin));
+    painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+
+    if (!reference.label.empty()) {
+      painter.setPen(QPen(settings.text_color, 1.0));
+      painter.drawText(
+        QRectF(rect.left() + 6.0, y - 15.0, rect.width() - 12.0, 14.0),
+        Qt::AlignRight | Qt::AlignVCenter,
+        QString::fromStdString(reference.label));
+    }
+  }
+}
+
 void drawLegend(
   QPainter & painter,
   const QRectF & rect,
@@ -234,7 +266,8 @@ void drawLegend(
 
 QImage Plot2DRenderer::render(
   PlotRenderSettings settings,
-  const std::vector<RenderableSeries> & series) const
+  const std::vector<RenderableSeries> & series,
+  const std::vector<RenderableReference> & references) const
 {
   settings.width = std::max(settings.width, kMinimumWidth);
   settings.height = std::max(settings.height, kMinimumHeight);
@@ -256,6 +289,7 @@ QImage Plot2DRenderer::render(
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
   drawGrid(painter, rect, x_range, y_range, settings);
+  drawReferences(painter, rect, y_range, references, settings);
   for (const RenderableSeries & item : series) {
     drawSeries(painter, rect, x_range, y_range, item);
   }

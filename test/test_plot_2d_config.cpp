@@ -48,6 +48,8 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_EQ(config.layout.height, 220);
   EXPECT_EQ(config.layout.x_offset, 10);
   EXPECT_EQ(config.layout.y_offset, 10);
+
+  EXPECT_TRUE(config.references.empty());
 }
 
 TEST(Plot2DConfig, RepairsInvalidFixedAxisRange)
@@ -100,4 +102,22 @@ TEST(Plot2DConfig, RepairsInvalidSeriesAppearanceValues)
   EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
   EXPECT_DOUBLE_EQ(config.series.front().value_scale, 1.0);
   EXPECT_DOUBLE_EQ(config.series.front().value_offset, 0.0);
+}
+
+TEST(Plot2DConfig, RepairsInvalidReferenceAppearanceValues)
+{
+  Plot2DConfig config;
+  config.references.push_back(rviz_2d_plot_plugin::ReferenceConfig{});
+  config.references.front().color.red = 300;
+  config.references.front().color.green = -4;
+  config.references.front().alpha = 4.0;
+  config.references.front().line_width = -1.0;
+
+  config.repair();
+
+  ASSERT_EQ(config.references.size(), 1U);
+  EXPECT_EQ(config.references.front().color.red, 255);
+  EXPECT_EQ(config.references.front().color.green, 0);
+  EXPECT_DOUBLE_EQ(config.references.front().alpha, 1.0);
+  EXPECT_DOUBLE_EQ(config.references.front().line_width, 1.0);
 }

@@ -70,6 +70,21 @@ void SeriesConfig::repair()
   }
 }
 
+void ReferenceConfig::repair()
+{
+  color.repair();
+  if (!std::isfinite(value)) {
+    value = 0.0;
+  }
+  if (!std::isfinite(alpha)) {
+    alpha = 1.0;
+  }
+  alpha = std::clamp(alpha, 0.0, 1.0);
+  if (!std::isfinite(line_width) || line_width < 1.0) {
+    line_width = 1.0;
+  }
+}
+
 void Plot2DConfig::repair()
 {
   if (series.empty()) {
@@ -78,6 +93,9 @@ void Plot2DConfig::repair()
 
   for (SeriesConfig & item : series) {
     item.repair();
+  }
+  for (ReferenceConfig & reference : references) {
+    reference.repair();
   }
 
   y_axis.repairFixedRange();

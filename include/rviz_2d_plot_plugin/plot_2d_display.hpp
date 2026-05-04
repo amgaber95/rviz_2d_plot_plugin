@@ -72,6 +72,7 @@ protected:
 private Q_SLOTS:
   void onConfigPropertyChanged();
   void onSeriesCountChanged();
+  void onReferenceCountChanged();
   void onClearHistoryChanged();
   void onTopicOptionsRequested(
     rviz_common::properties::EditableEnumProperty * property);
@@ -117,11 +118,27 @@ private:
     rviz_common::properties::FloatProperty * value_offset{nullptr};
   };
 
+  struct ReferencePropertySet
+  {
+    rviz_common::properties::Property * root{nullptr};
+    rviz_common::properties::BoolProperty * enabled{nullptr};
+    rviz_common::properties::FloatProperty * value{nullptr};
+    rviz_common::properties::StringProperty * label{nullptr};
+    rviz_common::properties::ColorProperty * color{nullptr};
+    rviz_common::properties::FloatProperty * alpha{nullptr};
+    rviz_common::properties::FloatProperty * line_width{nullptr};
+    rviz_common::properties::EnumProperty * line_style{nullptr};
+  };
+
   std::vector<SeriesConfig> seriesConfigFromProperties_() const;
+  std::vector<ReferenceConfig> referenceConfigFromProperties_() const;
   Plot2DConfig configFromProperties_() const;
   void rebuildSeriesProperties_(
     int count,
     const std::vector<SeriesConfig> & values);
+  void rebuildReferenceProperties_(
+    int count,
+    const std::vector<ReferenceConfig> & values);
   const SeriesPropertySet * seriesPropertiesForField_(
     rviz_common::properties::EditableEnumProperty * property) const;
   void resolveAndSubscribe_();
@@ -131,6 +148,7 @@ private:
   void updateStatusFromController_();
   PlotRenderSettings renderSettingsFromProperties_() const;
   std::vector<RenderableSeries> renderableSeries_() const;
+  std::vector<RenderableReference> renderableReferences_() const;
   void updateOverlayGeometry_();
   void renderOverlay_();
   void unsubscribe_();
@@ -153,6 +171,9 @@ private:
   rviz_common::properties::BoolProperty * auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};
   rviz_common::properties::FloatProperty * y_max_property_{nullptr};
+  rviz_common::properties::Property * references_root_property_{nullptr};
+  rviz_common::properties::IntProperty * reference_count_property_{nullptr};
+  std::vector<ReferencePropertySet> reference_properties_;
   rviz_common::properties::Property * layout_root_property_{nullptr};
   rviz_common::properties::IntProperty * width_property_{nullptr};
   rviz_common::properties::IntProperty * height_property_{nullptr};

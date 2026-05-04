@@ -90,9 +90,23 @@ struct SeriesConfig
   void repair();
 };
 
+struct ReferenceConfig
+{
+  bool enabled{true};
+  double value{0.0};
+  std::string label;
+  SeriesColor color{255, 180, 60};
+  double alpha{1.0};
+  double line_width{1.2};
+  LineStyle line_style{LineStyle::Solid};
+
+  void repair();
+};
+
 struct Plot2DConfig
 {
   std::vector<SeriesConfig> series{SeriesConfig{}};
+  std::vector<ReferenceConfig> references;
   AxisConfig y_axis;
   TimeConfig time;
   LayoutConfig layout;
