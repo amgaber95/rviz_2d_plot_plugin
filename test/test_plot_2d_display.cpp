@@ -264,6 +264,8 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(y_axis, "Y Max"));
 
   auto * references = Plot2DDisplayTestAccessor::referencesRoot(display);
+  EXPECT_NE(nullptr, findChild(references, "Add Preset"));
+  EXPECT_NE(nullptr, findChild(references, "Preset Value"));
   EXPECT_NE(nullptr, findChild(references, "Reference Count"));
 
   auto * layout = Plot2DDisplayTestAccessor::layoutRoot(display);
@@ -411,6 +413,39 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.layout.height, 180);
   EXPECT_EQ(config.layout.x_offset, 20);
   EXPECT_EQ(config.layout.y_offset, 30);
+}
+
+TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(display);
+  auto * reference_count = findChild(references_root, "Reference Count");
+  ASSERT_NE(nullptr, reference_count);
+
+  reference_count->setValue(1);
+  auto * reference_1 = findChild(references_root, "Reference 1");
+  ASSERT_NE(nullptr, reference_1);
+  findChild(reference_1, "Value")->setValue(0.25);
+  findChild(reference_1, "Label")->setValue("Existing");
+  auto * preset_value = findChild(references_root, "Preset Value");
+  auto * add_preset = findChild(references_root, "Add Preset");
+  ASSERT_NE(nullptr, preset_value);
+  ASSERT_NE(nullptr, add_preset);
+  preset_value->setValue(0.75);
+
+  add_preset->setValue("Upper Limit");
+
+  EXPECT_EQ(reference_count->getValue().toInt(), 2);
+  reference_1 = findChild(references_root, "Reference 1");
+  auto * reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  EXPECT_DOUBLE_EQ(findChild(reference_1, "Value")->getValue().toDouble(), 0.25);
+  EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "Existing");
+  EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 0.75);
+  EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Upper Limit");
+  EXPECT_EQ(add_preset->getValue().toString(), "None");
 }
 
 TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)

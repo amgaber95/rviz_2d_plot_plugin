@@ -10,9 +10,11 @@
 #include <QImage>
 #include <QObject>
 #include <QPainter>
+#include <QSignalBlocker>
 #include <QVariant>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -170,6 +172,82 @@ void addPlotStyleOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(plotStyleName(PlotStyle::Points));
 }
 
+constexpr const char * kNoReferencePreset = "None";
+
+void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(kNoReferencePreset);
+  property->addOptionStd("Zero Line");
+  property->addOptionStd("Upper Limit");
+  property->addOptionStd("Lower Limit");
+  property->addOptionStd("Symmetric Limits");
+}
+
+std::vector<ReferenceConfig> referencePresetFromName(
+  const std::string & name,
+  const double preset_value)
+{
+  const double value = std::isfinite(preset_value) ? preset_value : 0.0;
+
+  if (name == "Zero Line") {
+    ReferenceConfig reference;
+    reference.value = 0.0;
+    reference.label = "Zero";
+    reference.color = SeriesColor{180, 180, 180};
+    reference.alpha = 0.65;
+    reference.line_width = 1.0;
+    reference.line_style = LineStyle::Dot;
+    return {reference};
+  }
+
+  if (name == "Upper Limit") {
+    ReferenceConfig reference;
+    reference.value = value;
+    reference.label = "Upper Limit";
+    reference.color = SeriesColor{255, 180, 60};
+    reference.alpha = 0.9;
+    reference.line_width = 1.2;
+    reference.line_style = LineStyle::Dash;
+    return {reference};
+  }
+
+  if (name == "Lower Limit") {
+    ReferenceConfig reference;
+    reference.value = value;
+    reference.label = "Lower Limit";
+    reference.color = SeriesColor{80, 170, 255};
+    reference.alpha = 0.9;
+    reference.line_width = 1.2;
+    reference.line_style = LineStyle::Dash;
+    return {reference};
+  }
+
+  if (name == "Symmetric Limits") {
+    const double magnitude = std::abs(value);
+    ReferenceConfig upper;
+    upper.value = magnitude;
+    upper.label = "Upper Limit";
+    upper.color = SeriesColor{255, 180, 60};
+    upper.alpha = 0.9;
+    upper.line_width = 1.2;
+    upper.line_style = LineStyle::Dash;
+
+    ReferenceConfig lower;
+    lower.value = -magnitude;
+    lower.label = "Lower Limit";
+    lower.color = SeriesColor{80, 170, 255};
+    lower.alpha = 0.9;
+    lower.line_width = 1.2;
+    lower.line_style = LineStyle::Dash;
+    return {upper, lower};
+  }
+
+  return {};
+}
+
 }  // namespace
 
 Plot2DDisplay::Plot2DDisplay()
@@ -219,6 +297,14 @@ Plot2DDisplay::Plot2DDisplay()
 
   references_root_property_ = new rviz_common::properties::Property(
     "References", QVariant(), "Horizontal reference lines.", this);
+  reference_preset_property_ = new rviz_common::properties::EnumProperty(
+    "Add Preset", kNoReferencePreset, "Append a common reference line preset.",
+    references_root_property_, SLOT(onReferencePresetChanged()), this);
+  addReferencePresetOptions(reference_preset_property_);
+  reference_preset_value_property_ = new rviz_common::properties::FloatProperty(
+    "Preset Value", 1.0F,
+    "Y-axis value used by single-line presets. Symmetric limits use +/- this value.",
+    references_root_property_);
   reference_count_property_ = new rviz_common::properties::IntProperty(
     "Reference Count", 0, "Number of horizontal reference lines.",
     references_root_property_, SLOT(onReferenceCountChanged()), this, 0, 12);
@@ -354,6 +440,22 @@ void Plot2DDisplay::onSeriesCountChanged()
   const std::vector<SeriesConfig> current = seriesConfigFromProperties_();
   rebuildSeriesProperties_(series_count_property_->getInt(), current);
   onConfigPropertyChanged();
+}
+
+void Plot2DDisplay::onReferencePresetChanged()
+{
+  if (!reference_preset_property_) {
+    return;
+  }
+
+  const std::string preset = reference_preset_property_->getStdString();
+  if (preset == kNoReferencePreset) {
+    return;
+  }
+
+  appendReferencePreset_();
+  const QSignalBlocker blocker(reference_preset_property_);
+  reference_preset_property_->setValue(kNoReferencePreset);
 }
 
 void Plot2DDisplay::onReferenceCountChanged()
@@ -565,7 +667,7 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     reference_count_property_->setInt(repaired_count);
   }
 
-  references_root_property_->removeChildren(1);
+  references_root_property_->removeChildren(3);
   reference_properties_.clear();
   reference_properties_.reserve(static_cast<std::size_t>(repaired_count));
 
@@ -606,6 +708,32 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     addLineStyleOptions(properties.line_style);
     reference_properties_.push_back(properties);
   }
+}
+
+void Plot2DDisplay::appendReferencePreset_()
+{
+  const double preset_value = reference_preset_value_property_ ?
+    reference_preset_value_property_->getFloat() : 0.0;
+  std::vector<ReferenceConfig> additions = referencePresetFromName(
+    reference_preset_property_->getStdString(), preset_value);
+  if (additions.empty()) {
+    return;
+  }
+
+  std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
+  for (const ReferenceConfig & reference : additions) {
+    if (references.size() >= 12U) {
+      break;
+    }
+    references.push_back(reference);
+  }
+
+  {
+    const QSignalBlocker blocker(reference_count_property_);
+    reference_count_property_->setInt(static_cast<int>(references.size()));
+  }
+  rebuildReferenceProperties_(static_cast<int>(references.size()), references);
+  onConfigPropertyChanged();
 }
 
 const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField_(

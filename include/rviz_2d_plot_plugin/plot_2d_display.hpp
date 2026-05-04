@@ -72,6 +72,7 @@ protected:
 private Q_SLOTS:
   void onConfigPropertyChanged();
   void onSeriesCountChanged();
+  void onReferencePresetChanged();
   void onReferenceCountChanged();
   void onClearHistoryChanged();
   void onTopicOptionsRequested(
@@ -139,6 +140,7 @@ private:
   void rebuildReferenceProperties_(
     int count,
     const std::vector<ReferenceConfig> & values);
+  void appendReferencePreset_();
   const SeriesPropertySet * seriesPropertiesForField_(
     rviz_common::properties::EditableEnumProperty * property) const;
   void resolveAndSubscribe_();
@@ -172,6 +174,8 @@ private:
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};
   rviz_common::properties::FloatProperty * y_max_property_{nullptr};
   rviz_common::properties::Property * references_root_property_{nullptr};
+  rviz_common::properties::EnumProperty * reference_preset_property_{nullptr};
+  rviz_common::properties::FloatProperty * reference_preset_value_property_{nullptr};
   rviz_common::properties::IntProperty * reference_count_property_{nullptr};
   std::vector<ReferencePropertySet> reference_properties_;
   rviz_common::properties::Property * layout_root_property_{nullptr};
