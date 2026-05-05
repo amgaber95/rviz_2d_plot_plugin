@@ -54,6 +54,12 @@ struct Plot2DControllerState
   std::vector<PlotSeriesControllerState> series;
 };
 
+struct HeaderStampExtractor
+{
+  std::unique_ptr<GenericFieldExtractor> sec;
+  std::unique_ptr<GenericFieldExtractor> nanosec;
+};
+
 class Plot2DController
 {
 public:
@@ -80,6 +86,7 @@ private:
   Plot2DConfig config_;
   Plot2DControllerState state_;
   std::vector<std::unique_ptr<GenericFieldExtractor>> extractors_;
+  std::vector<HeaderStampExtractor> header_stamp_extractors_;
 };
 
 }  // namespace rviz_2d_plot_plugin

@@ -172,6 +172,34 @@ void addPlotStyleOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(plotStyleName(PlotStyle::Points));
 }
 
+std::string timeSourceName(const TimeSource source)
+{
+  switch (source) {
+    case TimeSource::ReceiveTime:
+      return "Receive Time";
+    case TimeSource::HeaderStamp:
+      return "Message Header Stamp";
+  }
+  return "Receive Time";
+}
+
+TimeSource timeSourceFromName(const std::string & name)
+{
+  if (name == "Message Header Stamp") {
+    return TimeSource::HeaderStamp;
+  }
+  return TimeSource::ReceiveTime;
+}
+
+void addTimeSourceOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(timeSourceName(TimeSource::ReceiveTime));
+  property->addOptionStd(timeSourceName(TimeSource::HeaderStamp));
+}
+
 std::string legendPositionName(const LegendPosition position)
 {
   switch (position) {
@@ -320,6 +348,11 @@ Plot2DDisplay::Plot2DDisplay()
 
   time_root_property_ = new rviz_common::properties::Property(
     "Time", QVariant(), "Time-series history and redraw settings.", this);
+  time_source_property_ = new rviz_common::properties::EnumProperty(
+    "Time Source", QString::fromStdString(timeSourceName(TimeSource::ReceiveTime)),
+    "Timestamp samples by receive time or by message header stamp when available.",
+    time_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addTimeSourceOptions(time_source_property_);
   window_seconds_property_ = new rviz_common::properties::FloatProperty(
     "Window Seconds", 30.0F, "Visible rolling time window in seconds.",
     time_root_property_, SLOT(onConfigPropertyChanged()), this);
@@ -642,6 +675,8 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.time.window_seconds = window_seconds_property_->getFloat();
   config.time.refresh_rate_hz = refresh_rate_property_->getFloat();
   config.time.paused = pause_plot_property_->getBool();
+  config.time.source = time_source_property_ ?
+    timeSourceFromName(time_source_property_->getStdString()) : TimeSource::ReceiveTime;
 
   config.y_axis.scale_mode = auto_scale_property_->getBool() ?
     AxisScaleMode::Auto : AxisScaleMode::Fixed;

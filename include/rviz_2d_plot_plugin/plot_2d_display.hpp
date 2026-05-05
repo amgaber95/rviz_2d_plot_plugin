@@ -168,6 +168,7 @@ private:
   rviz_common::properties::IntProperty * series_count_property_{nullptr};
   std::vector<SeriesPropertySet> series_properties_;
   rviz_common::properties::Property * time_root_property_{nullptr};
+  rviz_common::properties::EnumProperty * time_source_property_{nullptr};
   rviz_common::properties::FloatProperty * window_seconds_property_{nullptr};
   rviz_common::properties::FloatProperty * refresh_rate_property_{nullptr};
   rviz_common::properties::Property * y_axis_root_property_{nullptr};

@@ -34,6 +34,12 @@ enum class AxisScaleMode
   Fixed,
 };
 
+enum class TimeSource
+{
+  ReceiveTime,
+  HeaderStamp,
+};
+
 struct AxisConfig
 {
   AxisScaleMode scale_mode{AxisScaleMode::Auto};
@@ -50,6 +56,7 @@ struct TimeConfig
   double window_seconds{30.0};
   double refresh_rate_hz{20.0};
   bool paused{false};
+  TimeSource source{TimeSource::ReceiveTime};
 
   void repair();
 };

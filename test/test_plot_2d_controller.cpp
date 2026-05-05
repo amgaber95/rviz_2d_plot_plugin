@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/serialized_message.hpp>
@@ -17,6 +18,7 @@
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::Plot2DController;
 using rviz_2d_plot_plugin::PlotControllerStatus;
+using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
 
 namespace
@@ -31,6 +33,22 @@ rclcpp::SerializedMessage serializeTwist(
   message.angular.z = angular_z;
 
   rclcpp::Serialization<geometry_msgs::msg::Twist> serializer;
+  rclcpp::SerializedMessage serialized;
+  serializer.serialize_message(&message, &serialized);
+  return serialized;
+}
+
+rclcpp::SerializedMessage serializePoseStamped(
+  const double position_x,
+  const int32_t stamp_sec,
+  const uint32_t stamp_nanosec)
+{
+  geometry_msgs::msg::PoseStamped message;
+  message.header.stamp.sec = stamp_sec;
+  message.header.stamp.nanosec = stamp_nanosec;
+  message.pose.position.x = position_x;
+
+  rclcpp::Serialization<geometry_msgs::msg::PoseStamped> serializer;
   rclcpp::SerializedMessage serialized;
   serializer.serialize_message(&message, &serialized);
   return serialized;
@@ -93,6 +111,40 @@ TEST(Plot2DController, AppliesSeriesScaleAndOffsetToExtractedSamples)
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 5.0);
   ASSERT_TRUE(controller.state().series[0].latest_value.has_value());
   EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 5.0);
+}
+
+TEST(Plot2DController, UsesMessageHeaderStampWhenConfigured)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/pose", {"geometry_msgs/msg/PoseStamped"}}};
+  Plot2DConfig config;
+  config.series[0].topic = "/pose";
+  config.series[0].field = "pose/position/x";
+  config.time.source = TimeSource::HeaderStamp;
+  config.time.window_seconds = 10.0;
+  controller.configure(config, topics);
+
+  EXPECT_TRUE(
+    controller.appendSerializedMessage(
+      "/pose", serializePoseStamped(3.5, 12, 250000000), 99.0));
+
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 12.25);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 3.5);
+}
+
+TEST(Plot2DController, FallsBackToReceiveTimeWhenHeaderStampIsUnavailable)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.time.source = TimeSource::HeaderStamp;
+  controller.configure(config, topics);
+
+  EXPECT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5), 42.0));
+
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 42.0);
 }
 
 TEST(Plot2DController, ReconfigureRewritesPreservedSamplesForTransformChange)

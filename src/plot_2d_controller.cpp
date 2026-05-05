@@ -6,7 +6,9 @@
 
 #include "rviz_2d_plot_plugin/plot_2d_controller.hpp"
 
+#include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <utility>
 
 namespace rviz_2d_plot_plugin
@@ -56,6 +58,51 @@ int statusSeverity(const PlotControllerStatus status)
   return 3;
 }
 
+bool containsPath(const FieldPathOptions & options, const std::string & path)
+{
+  return std::find(options.paths.begin(), options.paths.end(), path) != options.paths.end();
+}
+
+HeaderStampExtractor makeHeaderStampExtractor(const std::string & type)
+{
+  const FieldPathOptions fields = numericScalarFieldPathsForType(type, 4);
+  if (!fields.error.empty() ||
+    !containsPath(fields, "header/stamp/sec") ||
+    !containsPath(fields, "header/stamp/nanosec"))
+  {
+    return {};
+  }
+
+  HeaderStampExtractor extractor;
+  extractor.sec = std::make_unique<GenericFieldExtractor>(
+    type, std::vector<std::string>{"header", "stamp", "sec"});
+  extractor.nanosec = std::make_unique<GenericFieldExtractor>(
+    type, std::vector<std::string>{"header", "stamp", "nanosec"});
+  if (!extractor.sec->ready() || !extractor.nanosec->ready()) {
+    return {};
+  }
+  return extractor;
+}
+
+std::optional<double> extractHeaderStampSeconds(
+  const HeaderStampExtractor & extractor,
+  const rclcpp::SerializedMessage & serialized)
+{
+  if (!extractor.sec || !extractor.nanosec) {
+    return std::nullopt;
+  }
+
+  const FieldExtractionResult sec = extractor.sec->extract(serialized);
+  const FieldExtractionResult nanosec = extractor.nanosec->extract(serialized);
+  if (sec.status != FieldExtractionStatus::Ok || !sec.value.has_value() ||
+    nanosec.status != FieldExtractionStatus::Ok || !nanosec.value.has_value())
+  {
+    return std::nullopt;
+  }
+
+  return sec.value.value() + nanosec.value.value() * 1e-9;
+}
+
 }  // namespace
 
 void Plot2DController::configure(
@@ -69,8 +116,10 @@ void Plot2DController::configure(
   config_.repair();
   state_ = Plot2DControllerState{};
   extractors_.clear();
+  header_stamp_extractors_.clear();
   state_.series.reserve(config_.series.size());
   extractors_.reserve(config_.series.size());
+  header_stamp_extractors_.reserve(config_.series.size());
 
   for (const SeriesConfig & series : config_.series) {
     PlotSeriesControllerState series_state;
@@ -82,6 +131,7 @@ void Plot2DController::configure(
       series_state.message = "Series is disabled";
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
+      header_stamp_extractors_.push_back({});
       continue;
     }
 
@@ -94,6 +144,7 @@ void Plot2DController::configure(
       setResolutionError(series_state, resolution);
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
+      header_stamp_extractors_.push_back({});
       continue;
     }
 
@@ -104,6 +155,7 @@ void Plot2DController::configure(
       series_state.message = extractor->error();
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
+      header_stamp_extractors_.push_back({});
       continue;
     }
 
@@ -114,7 +166,8 @@ void Plot2DController::configure(
       previous_state.series[series_index].status == PlotControllerStatus::Ok &&
       previous_state.series[series_index].topic == resolution.topic &&
       previous_state.series[series_index].type == resolution.type &&
-      previous_config.series[series_index].field == series.field)
+      previous_config.series[series_index].field == series.field &&
+      previous_config.time.source == config_.time.source)
     {
       series_state.samples = previous_state.series[series_index].samples;
       series_state.samples.rewriteValuesForTransformChange(
@@ -131,6 +184,9 @@ void Plot2DController::configure(
     }
     state_.series.push_back(std::move(series_state));
     extractors_.push_back(std::move(extractor));
+    header_stamp_extractors_.push_back(
+      config_.time.source == TimeSource::HeaderStamp ?
+      makeHeaderStampExtractor(resolution.type) : HeaderStampExtractor{});
   }
 
   updateAggregateStatus();
@@ -161,10 +217,21 @@ bool Plot2DController::appendSerializedMessage(
       continue;
     }
 
+    double sample_time = receive_time;
+    if (config_.time.source == TimeSource::HeaderStamp &&
+      i < header_stamp_extractors_.size())
+    {
+      if (const std::optional<double> header_time =
+        extractHeaderStampSeconds(header_stamp_extractors_[i], serialized))
+      {
+        sample_time = header_time.value();
+      }
+    }
+
     const double transformed_value =
       result.value.value() * config_.series[i].value_scale + config_.series[i].value_offset;
-    series.samples.append(receive_time, transformed_value);
-    series.samples.pruneToWindow(receive_time, config_.time.window_seconds);
+    series.samples.append(sample_time, transformed_value);
+    series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
     series.latest_value = transformed_value;
     appended = true;
   }

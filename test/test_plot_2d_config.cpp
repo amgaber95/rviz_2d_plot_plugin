@@ -15,6 +15,7 @@ using rviz_2d_plot_plugin::AxisScaleMode;
 using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
+using rviz_2d_plot_plugin::TimeSource;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
 {
@@ -43,6 +44,7 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_DOUBLE_EQ(config.time.window_seconds, 30.0);
   EXPECT_DOUBLE_EQ(config.time.refresh_rate_hz, 20.0);
   EXPECT_FALSE(config.time.paused);
+  EXPECT_EQ(config.time.source, TimeSource::ReceiveTime);
 
   EXPECT_EQ(config.layout.width, 360);
   EXPECT_EQ(config.layout.height, 220);
