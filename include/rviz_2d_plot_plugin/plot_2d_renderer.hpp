@@ -40,6 +40,15 @@ struct RenderableReference
   bool enabled{true};
 };
 
+enum class LegendPosition
+{
+  TopLeft,
+  TopRight,
+  BottomLeft,
+  BottomRight,
+  Hidden
+};
+
 struct PlotRenderSettings
 {
   int width{360};
@@ -54,6 +63,7 @@ struct PlotRenderSettings
   QColor axis_color{230, 230, 230, 230};
   QColor grid_color{130, 130, 130, 80};
   QColor text_color{245, 245, 245, 235};
+  LegendPosition legend_position{LegendPosition::TopLeft};
 };
 
 class Plot2DRenderer

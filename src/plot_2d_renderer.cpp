@@ -237,7 +237,19 @@ void drawLegend(
   const PlotRange & x_range,
   const PlotRenderSettings & settings)
 {
-  double y = rect.top() + 4.0;
+  if (settings.legend_position == LegendPosition::Hidden) {
+    return;
+  }
+
+  struct LegendEntry
+  {
+    QColor color;
+    QString text;
+  };
+
+  std::vector<LegendEntry> entries;
+  entries.reserve(series.size());
+  double text_width = 0.0;
   for (const RenderableSeries & item : series) {
     if (!item.enabled || item.samples.empty()) {
       continue;
@@ -252,12 +264,35 @@ void drawLegend(
       continue;
     }
 
-    painter.setPen(QPen(item.color, 2.0));
-    painter.drawLine(QPointF(rect.left() + 8.0, y + 7.0), QPointF(rect.left() + 26.0, y + 7.0));
+    const QString text = QString::fromStdString(item.label + " " + formatValue(latest->value));
+    text_width = std::max(
+      text_width,
+      static_cast<double>(painter.fontMetrics().horizontalAdvance(text)));
+    entries.push_back(LegendEntry{item.color, text});
+  }
+
+  if (entries.empty()) {
+    return;
+  }
+
+  const double line_height = 16.0;
+  const double legend_width = std::min(rect.width() - 8.0, std::max(88.0, text_width + 38.0));
+  const double legend_height = line_height * static_cast<double>(entries.size());
+  const bool align_right =
+    settings.legend_position == LegendPosition::TopRight ||
+    settings.legend_position == LegendPosition::BottomRight;
+  const bool align_bottom =
+    settings.legend_position == LegendPosition::BottomLeft ||
+    settings.legend_position == LegendPosition::BottomRight;
+  const double x = align_right ? rect.right() - legend_width - 4.0 : rect.left() + 4.0;
+  double y = align_bottom ? rect.bottom() - legend_height - 4.0 : rect.top() + 4.0;
+
+  for (const LegendEntry & entry : entries) {
+    painter.setPen(QPen(entry.color, 2.0));
+    painter.drawLine(QPointF(x + 4.0, y + 7.0), QPointF(x + 22.0, y + 7.0));
 
     painter.setPen(QPen(settings.text_color, 1.0));
-    const QString text = QString::fromStdString(item.label + " " + formatValue(latest->value));
-    painter.drawText(QRectF(rect.left() + 32.0, y, rect.width() - 36.0, 16.0), text);
+    painter.drawText(QRectF(x + 28.0, y, legend_width - 30.0, line_height), entry.text);
     y += 16.0;
   }
 }

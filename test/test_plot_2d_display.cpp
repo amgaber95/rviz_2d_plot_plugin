@@ -75,6 +75,11 @@ public:
     return display.references_root_property_;
   }
 
+  static rviz_common::properties::Property * legendRoot(Plot2DDisplay & display)
+  {
+    return display.legend_root_property_;
+  }
+
   static rviz_common::properties::Property * layoutRoot(Plot2DDisplay & display)
   {
     return display.layout_root_property_;
@@ -83,6 +88,12 @@ public:
   static Plot2DConfig configFromProperties(Plot2DDisplay & display)
   {
     return display.configFromProperties_();
+  }
+
+  static rviz_2d_plot_plugin::PlotRenderSettings renderSettingsFromProperties(
+    Plot2DDisplay & display)
+  {
+    return display.renderSettingsFromProperties_();
   }
 
   static void setTopics(Plot2DDisplay & display, TopicTypeMap topics)
@@ -162,6 +173,7 @@ namespace
 {
 
 using rviz_2d_plot_plugin::AxisScaleMode;
+using rviz_2d_plot_plugin::LegendPosition;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::PlotControllerStatus;
 using rviz_2d_plot_plugin::Plot2DDisplay;
@@ -267,6 +279,10 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(references, "Add Preset"));
   EXPECT_NE(nullptr, findChild(references, "Preset Value"));
   EXPECT_NE(nullptr, findChild(references, "Reference Count"));
+
+  auto * legend = Plot2DDisplayTestAccessor::legendRoot(display);
+  ASSERT_NE(nullptr, legend);
+  EXPECT_NE(nullptr, findChild(legend, "Position"));
 
   auto * layout = Plot2DDisplayTestAccessor::layoutRoot(display);
   EXPECT_NE(nullptr, findChild(layout, "Width"));
@@ -446,6 +462,21 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 0.75);
   EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Upper Limit");
   EXPECT_EQ(add_preset->getValue().toString(), "None");
+}
+
+TEST(Plot2DDisplay, MapsLegendPositionPropertyToRenderSettings)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * legend = Plot2DDisplayTestAccessor::legendRoot(display);
+  ASSERT_NE(nullptr, legend);
+  auto * position = findChild(legend, "Position");
+  ASSERT_NE(nullptr, position);
+
+  position->setValue("Bottom Right");
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_EQ(settings.legend_position, LegendPosition::BottomRight);
 }
 
 TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)

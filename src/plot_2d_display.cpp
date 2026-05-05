@@ -172,6 +172,52 @@ void addPlotStyleOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(plotStyleName(PlotStyle::Points));
 }
 
+std::string legendPositionName(const LegendPosition position)
+{
+  switch (position) {
+    case LegendPosition::TopLeft:
+      return "Top Left";
+    case LegendPosition::TopRight:
+      return "Top Right";
+    case LegendPosition::BottomLeft:
+      return "Bottom Left";
+    case LegendPosition::BottomRight:
+      return "Bottom Right";
+    case LegendPosition::Hidden:
+      return "Hidden";
+  }
+  return "Top Left";
+}
+
+LegendPosition legendPositionFromName(const std::string & name)
+{
+  if (name == "Top Right") {
+    return LegendPosition::TopRight;
+  }
+  if (name == "Bottom Left") {
+    return LegendPosition::BottomLeft;
+  }
+  if (name == "Bottom Right") {
+    return LegendPosition::BottomRight;
+  }
+  if (name == "Hidden") {
+    return LegendPosition::Hidden;
+  }
+  return LegendPosition::TopLeft;
+}
+
+void addLegendPositionOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(legendPositionName(LegendPosition::TopLeft));
+  property->addOptionStd(legendPositionName(LegendPosition::TopRight));
+  property->addOptionStd(legendPositionName(LegendPosition::BottomLeft));
+  property->addOptionStd(legendPositionName(LegendPosition::BottomRight));
+  property->addOptionStd(legendPositionName(LegendPosition::Hidden));
+}
+
 constexpr const char * kNoReferencePreset = "None";
 
 void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
@@ -310,6 +356,14 @@ Plot2DDisplay::Plot2DDisplay()
     references_root_property_, SLOT(onReferenceCountChanged()), this, 0, 12);
   rebuildReferenceProperties_(0, {});
 
+  legend_root_property_ = new rviz_common::properties::Property(
+    "Legend", QVariant(), "Legend display and placement.", this);
+  legend_position_property_ = new rviz_common::properties::EnumProperty(
+    "Position", QString::fromStdString(legendPositionName(LegendPosition::TopLeft)),
+    "Legend placement inside the plot area.",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  addLegendPositionOptions(legend_position_property_);
+
   layout_root_property_ = new rviz_common::properties::Property(
     "Layout", QVariant(), "Overlay size and screen position.", this);
   width_property_ = new rviz_common::properties::IntProperty(
@@ -432,6 +486,11 @@ void Plot2DDisplay::reset()
 void Plot2DDisplay::onConfigPropertyChanged()
 {
   resolveAndSubscribe_();
+  renderOverlay_();
+}
+
+void Plot2DDisplay::onRenderPropertyChanged()
+{
   renderOverlay_();
 }
 
@@ -847,6 +906,8 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.grid_color.setAlpha(80);
   settings.text_color = text_color_property_->getColor();
   settings.text_color.setAlpha(235);
+  settings.legend_position = legend_position_property_ ?
+    legendPositionFromName(legend_position_property_->getStdString()) : LegendPosition::TopLeft;
   return settings;
 }
 

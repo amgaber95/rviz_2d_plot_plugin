@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QColor>
 #include <QImage>
+#include <QRect>
 
 #include <gtest/gtest.h>
 
@@ -22,6 +23,7 @@ using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::RenderableReference;
 using rviz_2d_plot_plugin::RenderableSeries;
 using rviz_2d_plot_plugin::LineStyle;
+using rviz_2d_plot_plugin::LegendPosition;
 
 namespace
 {
@@ -56,6 +58,24 @@ int countPixelsCloseTo(const QImage & image, const QColor & target)
   int count = 0;
   for (int y = 0; y < image.height(); ++y) {
     for (int x = 0; x < image.width(); ++x) {
+      const QColor pixel = image.pixelColor(x, y);
+      if (std::abs(pixel.red() - target.red()) < 40 &&
+        std::abs(pixel.green() - target.green()) < 40 &&
+        std::abs(pixel.blue() - target.blue()) < 40)
+      {
+        ++count;
+      }
+    }
+  }
+  return count;
+}
+
+int countPixelsCloseToInRect(const QImage & image, const QColor & target, const QRect & rect)
+{
+  int count = 0;
+  const QRect bounded = rect.intersected(image.rect());
+  for (int y = bounded.top(); y <= bounded.bottom(); ++y) {
+    for (int x = bounded.left(); x <= bounded.right(); ++x) {
       const QColor pixel = image.pixelColor(x, y);
       if (std::abs(pixel.red() - target.red()) < 40 &&
         std::abs(pixel.green() - target.green()) < 40 &&
@@ -258,4 +278,33 @@ TEST(Plot2DRenderer, DrawsEnabledReferenceLines)
   const QImage image = renderer.render(settings, {}, {reference});
 
   EXPECT_GT(countPixelsCloseTo(image, QColor(255, 180, 60)), 0);
+}
+
+TEST(Plot2DRenderer, PlacesLegendAtConfiguredCorner)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.legend_position = LegendPosition::BottomRight;
+
+  RenderableSeries series;
+  series.label = "L";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{10.0, 0.0}};
+
+  const QImage image = renderer.render(settings, {series});
+
+  EXPECT_GT(
+    countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(214, 118, 90, 24)),
+    0);
+  EXPECT_EQ(
+    countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(42, 16, 130, 28)),
+    0);
 }

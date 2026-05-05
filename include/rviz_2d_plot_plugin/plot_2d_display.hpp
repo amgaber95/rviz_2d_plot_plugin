@@ -71,6 +71,7 @@ protected:
 
 private Q_SLOTS:
   void onConfigPropertyChanged();
+  void onRenderPropertyChanged();
   void onSeriesCountChanged();
   void onReferencePresetChanged();
   void onReferenceCountChanged();
@@ -178,6 +179,8 @@ private:
   rviz_common::properties::FloatProperty * reference_preset_value_property_{nullptr};
   rviz_common::properties::IntProperty * reference_count_property_{nullptr};
   std::vector<ReferencePropertySet> reference_properties_;
+  rviz_common::properties::Property * legend_root_property_{nullptr};
+  rviz_common::properties::EnumProperty * legend_position_property_{nullptr};
   rviz_common::properties::Property * layout_root_property_{nullptr};
   rviz_common::properties::IntProperty * width_property_{nullptr};
   rviz_common::properties::IntProperty * height_property_{nullptr};
