@@ -70,6 +70,11 @@ public:
     return display.y_axis_root_property_;
   }
 
+  static rviz_common::properties::Property * gridRoot(Plot2DDisplay & display)
+  {
+    return display.grid_root_property_;
+  }
+
   static rviz_common::properties::Property * referencesRoot(Plot2DDisplay & display)
   {
     return display.references_root_property_;
@@ -275,6 +280,14 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(y_axis, "Y Min"));
   EXPECT_NE(nullptr, findChild(y_axis, "Y Max"));
 
+  auto * grid = Plot2DDisplayTestAccessor::gridRoot(display);
+  ASSERT_NE(nullptr, grid);
+  EXPECT_NE(nullptr, findChild(grid, "Major Grid"));
+  EXPECT_NE(nullptr, findChild(grid, "Minor Grid"));
+  EXPECT_NE(nullptr, findChild(grid, "X Major Ticks"));
+  EXPECT_NE(nullptr, findChild(grid, "Y Major Ticks"));
+  EXPECT_NE(nullptr, findChild(grid, "Minor Divisions"));
+
   auto * references = Plot2DDisplayTestAccessor::referencesRoot(display);
   EXPECT_NE(nullptr, findChild(references, "Add Preset"));
   EXPECT_NE(nullptr, findChild(references, "Preset Value"));
@@ -344,6 +357,8 @@ TEST(Plot2DDisplay, BooleanPropertiesUseCheckboxEditing)
     Plot2DDisplayTestAccessor::clearHistory(display),
     findChild(series, "Enabled"),
     findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale"),
+    findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Major Grid"),
+    findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Minor Grid"),
   };
 
   for (auto * property : bool_properties) {
@@ -477,6 +492,26 @@ TEST(Plot2DDisplay, MapsLegendPositionPropertyToRenderSettings)
 
   const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
   EXPECT_EQ(settings.legend_position, LegendPosition::BottomRight);
+}
+
+TEST(Plot2DDisplay, MapsGridPropertiesToRenderSettings)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * grid = Plot2DDisplayTestAccessor::gridRoot(display);
+  ASSERT_NE(nullptr, grid);
+  findChild(grid, "Major Grid")->setValue(false);
+  findChild(grid, "Minor Grid")->setValue(true);
+  findChild(grid, "X Major Ticks")->setValue(4);
+  findChild(grid, "Y Major Ticks")->setValue(7);
+  findChild(grid, "Minor Divisions")->setValue(2);
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_FALSE(settings.show_major_grid);
+  EXPECT_TRUE(settings.show_minor_grid);
+  EXPECT_EQ(settings.x_major_tick_count, 4);
+  EXPECT_EQ(settings.y_major_tick_count, 7);
+  EXPECT_EQ(settings.minor_grid_divisions, 2);
 }
 
 TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)

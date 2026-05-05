@@ -341,6 +341,24 @@ Plot2DDisplay::Plot2DDisplay()
     "Y Max", 1.0F, "Fixed y-axis maximum when auto scale is disabled.",
     y_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
 
+  grid_root_property_ = new rviz_common::properties::Property(
+    "Grid", QVariant(), "Plot grid density and visibility.", this);
+  show_major_grid_property_ = new rviz_common::properties::BoolProperty(
+    "Major Grid", true, "Draw major grid lines.",
+    grid_root_property_, SLOT(onRenderPropertyChanged()), this);
+  show_minor_grid_property_ = new rviz_common::properties::BoolProperty(
+    "Minor Grid", true, "Draw subtle minor grid lines between major ticks.",
+    grid_root_property_, SLOT(onRenderPropertyChanged()), this);
+  x_major_tick_count_property_ = new rviz_common::properties::IntProperty(
+    "X Major Ticks", 6, "Target number of major ticks on the x-axis.",
+    grid_root_property_, SLOT(onRenderPropertyChanged()), this, 2, 20);
+  y_major_tick_count_property_ = new rviz_common::properties::IntProperty(
+    "Y Major Ticks", 5, "Target number of major ticks on the y-axis.",
+    grid_root_property_, SLOT(onRenderPropertyChanged()), this, 2, 20);
+  minor_grid_divisions_property_ = new rviz_common::properties::IntProperty(
+    "Minor Divisions", 1, "Minor grid lines per major tick interval.",
+    grid_root_property_, SLOT(onRenderPropertyChanged()), this, 0, 8);
+
   references_root_property_ = new rviz_common::properties::Property(
     "References", QVariant(), "Horizontal reference lines.", this);
   reference_preset_property_ = new rviz_common::properties::EnumProperty(
@@ -908,6 +926,16 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.text_color.setAlpha(235);
   settings.legend_position = legend_position_property_ ?
     legendPositionFromName(legend_position_property_->getStdString()) : LegendPosition::TopLeft;
+  settings.show_major_grid = show_major_grid_property_ ?
+    show_major_grid_property_->getBool() : true;
+  settings.show_minor_grid = show_minor_grid_property_ ?
+    show_minor_grid_property_->getBool() : true;
+  settings.x_major_tick_count = x_major_tick_count_property_ ?
+    x_major_tick_count_property_->getInt() : 6;
+  settings.y_major_tick_count = y_major_tick_count_property_ ?
+    y_major_tick_count_property_->getInt() : 5;
+  settings.minor_grid_divisions = minor_grid_divisions_property_ ?
+    minor_grid_divisions_property_->getInt() : 1;
   return settings;
 }
 

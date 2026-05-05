@@ -53,6 +53,23 @@ bool hasDifferentPixel(const QImage & image, const QColor & color)
   return false;
 }
 
+int countDifferentPixels(const QImage & lhs, const QImage & rhs)
+{
+  if (lhs.size() != rhs.size()) {
+    return 1;
+  }
+
+  int count = 0;
+  for (int y = 0; y < lhs.height(); ++y) {
+    for (int x = 0; x < lhs.width(); ++x) {
+      if (lhs.pixelColor(x, y) != rhs.pixelColor(x, y)) {
+        ++count;
+      }
+    }
+  }
+  return count;
+}
+
 int countPixelsCloseTo(const QImage & image, const QColor & target)
 {
   int count = 0;
@@ -127,6 +144,31 @@ TEST(Plot2DRenderer, RendersNonEmptyImageWithGridAndAxes)
   const QImage image = renderer.render(settings, {});
 
   EXPECT_TRUE(hasDifferentPixel(image, settings.background_color));
+}
+
+TEST(Plot2DRenderer, MinorGridAddsSubtleIntermediateLines)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 4.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.grid_color = QColor(180, 180, 180, 160);
+  settings.x_major_tick_count = 3;
+  settings.y_major_tick_count = 3;
+  settings.minor_grid_divisions = 1;
+
+  settings.show_minor_grid = false;
+  const QImage major_only = renderer.render(settings, {});
+  settings.show_minor_grid = true;
+  const QImage with_minor = renderer.render(settings, {});
+
+  EXPECT_GT(countDifferentPixels(with_minor, major_only), 0);
 }
 
 TEST(Plot2DRenderer, DrawsSeriesSamples)

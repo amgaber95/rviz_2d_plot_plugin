@@ -64,6 +64,11 @@ struct PlotRenderSettings
   QColor grid_color{130, 130, 130, 80};
   QColor text_color{245, 245, 245, 235};
   LegendPosition legend_position{LegendPosition::TopLeft};
+  bool show_major_grid{true};
+  bool show_minor_grid{true};
+  int x_major_tick_count{6};
+  int y_major_tick_count{5};
+  int minor_grid_divisions{1};
 };
 
 class Plot2DRenderer

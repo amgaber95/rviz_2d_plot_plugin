@@ -86,6 +86,20 @@ std::string formatValue(const double value)
   return stream.str();
 }
 
+QString formatTimeOffset(const double seconds)
+{
+  if (std::abs(seconds) < 1e-6) {
+    return "now";
+  }
+  return QString::number(seconds, 'f', 0) + "s";
+}
+
+QColor scaledAlpha(QColor color, const double scale)
+{
+  color.setAlpha(std::clamp(static_cast<int>(static_cast<double>(color.alpha()) * scale), 0, 255));
+  return color;
+}
+
 Qt::PenStyle qtPenStyle(const LineStyle style)
 {
   switch (style) {
@@ -108,17 +122,37 @@ void drawGrid(
   const PlotRange & y_range,
   const PlotRenderSettings & settings)
 {
-  painter.setPen(QPen(settings.grid_color, 1.0));
+  const std::size_t x_major_count = static_cast<std::size_t>(
+    std::clamp(settings.x_major_tick_count, 2, 20));
+  const std::size_t y_major_count = static_cast<std::size_t>(
+    std::clamp(settings.y_major_tick_count, 2, 20));
+  const std::size_t minor_divisions = static_cast<std::size_t>(
+    std::clamp(settings.minor_grid_divisions, 0, 8));
+  const TickSet x_ticks = generateTicks(x_range, x_major_count, minor_divisions);
+  const TickSet y_ticks = generateTicks(y_range, y_major_count, minor_divisions);
 
-  const TickSet y_ticks = generateTicks(y_range, 5, 0);
-  for (const double tick : y_ticks.major) {
-    const double y = mapY(rect, y_range, tick);
-    painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+  if (settings.show_minor_grid) {
+    painter.setPen(QPen(scaledAlpha(settings.grid_color, 0.45), 1.0));
+    for (const double tick : y_ticks.minor) {
+      const double y = mapY(rect, y_range, tick);
+      painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+    }
+    for (const double tick : x_ticks.minor) {
+      const double x = mapX(rect, x_range, tick);
+      painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+    }
   }
 
-  for (int i = 0; i <= 5; ++i) {
-    const double x = rect.left() + rect.width() * static_cast<double>(i) / 5.0;
-    painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+  if (settings.show_major_grid) {
+    painter.setPen(QPen(settings.grid_color, 1.0));
+    for (const double tick : y_ticks.major) {
+      const double y = mapY(rect, y_range, tick);
+      painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+    }
+    for (const double tick : x_ticks.major) {
+      const double x = mapX(rect, x_range, tick);
+      painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+    }
   }
 
   painter.setPen(QPen(settings.axis_color, 1.0));
@@ -133,14 +167,13 @@ void drawGrid(
       QString::fromStdString(formatValue(tick)));
   }
 
-  painter.drawText(
-    QRectF(rect.left(), rect.bottom() + 4.0, rect.width(), 18.0),
-    Qt::AlignLeft | Qt::AlignVCenter,
-    QString::number(x_range.min - settings.now, 'f', 0) + "s");
-  painter.drawText(
-    QRectF(rect.left(), rect.bottom() + 4.0, rect.width(), 18.0),
-    Qt::AlignRight | Qt::AlignVCenter,
-    "now");
+  for (const double tick : x_ticks.major) {
+    const double x = mapX(rect, x_range, tick);
+    painter.drawText(
+      QRectF(x - 30.0, rect.bottom() + 4.0, 60.0, 18.0),
+      Qt::AlignHCenter | Qt::AlignVCenter,
+      formatTimeOffset(tick - settings.now));
+  }
 }
 
 void drawSeries(

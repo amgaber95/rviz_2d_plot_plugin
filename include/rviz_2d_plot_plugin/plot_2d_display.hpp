@@ -174,6 +174,12 @@ private:
   rviz_common::properties::BoolProperty * auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};
   rviz_common::properties::FloatProperty * y_max_property_{nullptr};
+  rviz_common::properties::Property * grid_root_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_major_grid_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_minor_grid_property_{nullptr};
+  rviz_common::properties::IntProperty * x_major_tick_count_property_{nullptr};
+  rviz_common::properties::IntProperty * y_major_tick_count_property_{nullptr};
+  rviz_common::properties::IntProperty * minor_grid_divisions_property_{nullptr};
   rviz_common::properties::Property * references_root_property_{nullptr};
   rviz_common::properties::EnumProperty * reference_preset_property_{nullptr};
   rviz_common::properties::FloatProperty * reference_preset_value_property_{nullptr};
