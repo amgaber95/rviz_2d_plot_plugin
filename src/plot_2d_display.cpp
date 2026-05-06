@@ -228,6 +228,20 @@ void addXAxisModeOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(xAxisModeName(XAxisMode::Field));
 }
 
+constexpr const char * kNoSeriesAction = "None";
+
+void addSeriesActionOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(kNoSeriesAction);
+  property->addOptionStd("Duplicate");
+  property->addOptionStd("Delete");
+  property->addOptionStd("Move Up");
+  property->addOptionStd("Move Down");
+}
+
 std::string legendPositionName(const LegendPosition position)
 {
   switch (position) {
@@ -597,6 +611,59 @@ void Plot2DDisplay::onSeriesCountChanged()
   onConfigPropertyChanged();
 }
 
+void Plot2DDisplay::onSeriesActionChanged()
+{
+  auto * action_property =
+    qobject_cast<rviz_common::properties::EnumProperty *>(sender());
+  if (!action_property) {
+    return;
+  }
+
+  const auto property_it = std::find_if(
+    series_properties_.begin(), series_properties_.end(),
+    [action_property](const SeriesPropertySet & properties) {
+      return properties.action == action_property;
+    });
+  if (property_it == series_properties_.end()) {
+    return;
+  }
+
+  const std::string action = action_property->getStdString();
+  if (action == kNoSeriesAction) {
+    return;
+  }
+
+  std::vector<SeriesConfig> series = seriesConfigFromProperties_();
+  const std::size_t index = static_cast<std::size_t>(
+    std::distance(series_properties_.begin(), property_it));
+  bool changed = false;
+
+  if (action == "Duplicate" && index < series.size() && series.size() < 12U) {
+    SeriesConfig copy = series[index];
+    copy.label = copy.label.empty() ? "Series Copy" : copy.label + " Copy";
+    series.insert(series.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
+    changed = true;
+  } else if (action == "Delete" && index < series.size() && series.size() > 1U) {
+    series.erase(series.begin() + static_cast<std::ptrdiff_t>(index));
+    changed = true;
+  } else if (action == "Move Up" && index > 0U && index < series.size()) {
+    std::swap(series[index - 1U], series[index]);
+    changed = true;
+  } else if (action == "Move Down" && index + 1U < series.size()) {
+    std::swap(series[index], series[index + 1U]);
+    changed = true;
+  }
+
+  if (!changed) {
+    const QSignalBlocker blocker(action_property);
+    action_property->setValue(kNoSeriesAction);
+    return;
+  }
+
+  replaceSeriesProperties_(series);
+  onConfigPropertyChanged();
+}
+
 void Plot2DDisplay::onReferencePresetChanged()
 {
   if (!reference_preset_property_) {
@@ -770,6 +837,10 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     const QString name = "Series " + QString::number(i + 1);
     properties.root = new rviz_common::properties::Property(
       name, QVariant(), "Plotted topic field.", series_root_property_);
+    properties.action = new rviz_common::properties::EnumProperty(
+      "Action", kNoSeriesAction, "Duplicate, delete, or reorder this series.",
+      properties.root, SLOT(onSeriesActionChanged()), this);
+    addSeriesActionOptions(properties.action);
     properties.enabled = new rviz_common::properties::BoolProperty(
       "Enabled", value.enabled, "Enable this series.", properties.root,
       SLOT(onConfigPropertyChanged()), this);
@@ -830,6 +901,16 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       properties.root, SLOT(onConfigPropertyChanged()), this);
     series_properties_.push_back(properties);
   }
+}
+
+void Plot2DDisplay::replaceSeriesProperties_(const std::vector<SeriesConfig> & values)
+{
+  const int count = static_cast<int>(std::clamp<std::size_t>(values.size(), 1U, 12U));
+  {
+    const QSignalBlocker blocker(series_count_property_);
+    series_count_property_->setInt(count);
+  }
+  rebuildSeriesProperties_(count, values);
 }
 
 void Plot2DDisplay::rebuildReferenceProperties_(

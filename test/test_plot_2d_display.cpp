@@ -267,6 +267,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   ASSERT_NE(nullptr, series);
   EXPECT_NE(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count"));
   EXPECT_NE(nullptr, findChild(series, "Enabled"));
+  EXPECT_NE(nullptr, findChild(series, "Action"));
   EXPECT_NE(nullptr, findChild(series, "Topic"));
   EXPECT_NE(nullptr, findChild(series, "X Field"));
   EXPECT_NE(nullptr, findChild(series, "Field"));
@@ -572,6 +573,55 @@ TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)
 
   EXPECT_NE(color_1->getColor(), color_2->getColor());
   EXPECT_NE(color_2->getColor(), color_3->getColor());
+}
+
+TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_count =
+    findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(2);
+  auto * series_1 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  auto * series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  findChild(series_1, "Label")->setValue("First");
+  findChild(series_1, "Topic")->setValue("/first");
+  findChild(series_1, "Field")->setValue("data");
+  findChild(series_2, "Label")->setValue("Second");
+
+  auto * action = findChild(series_1, "Action");
+  ASSERT_NE(nullptr, action);
+  action->setValue("Duplicate");
+
+  EXPECT_EQ(series_count->getValue().toInt(), 3);
+  series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  auto * series_3 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3");
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+  EXPECT_EQ(findChild(series_2, "Label")->getValue().toString(), "First Copy");
+  EXPECT_EQ(findChild(series_2, "Topic")->getValue().toString(), "/first");
+  EXPECT_EQ(findChild(series_3, "Label")->getValue().toString(), "Second");
+
+  action = findChild(series_3, "Action");
+  ASSERT_NE(nullptr, action);
+  action->setValue("Move Up");
+  series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  series_3 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3");
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+  EXPECT_EQ(findChild(series_2, "Label")->getValue().toString(), "Second");
+  EXPECT_EQ(findChild(series_3, "Label")->getValue().toString(), "First Copy");
+
+  action = findChild(series_3, "Action");
+  ASSERT_NE(nullptr, action);
+  action->setValue("Delete");
+
+  EXPECT_EQ(series_count->getValue().toInt(), 2);
+  EXPECT_EQ(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3"));
 }
 
 TEST(Plot2DDisplay, BuildsPlotConfigFromMultipleSeriesProperties)

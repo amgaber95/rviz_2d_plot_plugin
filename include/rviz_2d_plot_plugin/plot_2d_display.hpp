@@ -73,6 +73,7 @@ private Q_SLOTS:
   void onConfigPropertyChanged();
   void onRenderPropertyChanged();
   void onSeriesCountChanged();
+  void onSeriesActionChanged();
   void onReferencePresetChanged();
   void onReferenceCountChanged();
   void onClearHistoryChanged();
@@ -107,6 +108,7 @@ private:
   struct SeriesPropertySet
   {
     rviz_common::properties::Property * root{nullptr};
+    rviz_common::properties::EnumProperty * action{nullptr};
     rviz_common::properties::BoolProperty * enabled{nullptr};
     rviz_common::properties::EditableEnumProperty * topic{nullptr};
     rviz_common::properties::EditableEnumProperty * x_field{nullptr};
@@ -139,6 +141,7 @@ private:
   void rebuildSeriesProperties_(
     int count,
     const std::vector<SeriesConfig> & values);
+  void replaceSeriesProperties_(const std::vector<SeriesConfig> & values);
   void rebuildReferenceProperties_(
     int count,
     const std::vector<ReferenceConfig> & values);
