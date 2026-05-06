@@ -17,7 +17,12 @@ namespace rviz_2d_plot_plugin
 struct PlotSample
 {
   double time{0.0};
+  double x{0.0};
   double value{0.0};
+
+  PlotSample() = default;
+  PlotSample(double sample_time, double sample_value);
+  PlotSample(double sample_time, double sample_x, double sample_value);
 };
 
 struct ValueRange
@@ -30,6 +35,7 @@ class RollingSampleBuffer
 {
 public:
   void append(double time, double value);
+  void append(double time, double x, double value);
   void pruneBefore(double minimum_time);
   void pruneToWindow(double latest_time, double window_seconds);
   void rewriteValuesForTransformChange(
@@ -43,6 +49,7 @@ public:
   std::size_t size() const;
   const std::vector<PlotSample> & samples() const;
   std::optional<PlotSample> latest() const;
+  std::optional<ValueRange> xRange() const;
   std::optional<ValueRange> valueRange() const;
 
 private:

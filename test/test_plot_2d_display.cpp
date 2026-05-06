@@ -70,6 +70,11 @@ public:
     return display.y_axis_root_property_;
   }
 
+  static rviz_common::properties::Property * xAxisRoot(Plot2DDisplay & display)
+  {
+    return display.x_axis_root_property_;
+  }
+
   static rviz_common::properties::Property * gridRoot(Plot2DDisplay & display)
   {
     return display.grid_root_property_;
@@ -185,6 +190,7 @@ using rviz_2d_plot_plugin::Plot2DDisplay;
 using rviz_2d_plot_plugin::Plot2DDisplayTestAccessor;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
+using rviz_2d_plot_plugin::XAxisMode;
 
 void ensureQtApplication()
 {
@@ -262,6 +268,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count"));
   EXPECT_NE(nullptr, findChild(series, "Enabled"));
   EXPECT_NE(nullptr, findChild(series, "Topic"));
+  EXPECT_NE(nullptr, findChild(series, "X Field"));
   EXPECT_NE(nullptr, findChild(series, "Field"));
   EXPECT_NE(nullptr, findChild(series, "Label"));
   EXPECT_NE(nullptr, findChild(series, "Color"));
@@ -276,6 +283,12 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(time, "Time Source"));
   EXPECT_NE(nullptr, findChild(time, "Window Seconds"));
   EXPECT_NE(nullptr, findChild(time, "Refresh Rate"));
+
+  auto * x_axis = Plot2DDisplayTestAccessor::xAxisRoot(display);
+  EXPECT_NE(nullptr, findChild(x_axis, "Mode"));
+  EXPECT_NE(nullptr, findChild(x_axis, "Auto Scale"));
+  EXPECT_NE(nullptr, findChild(x_axis, "X Min"));
+  EXPECT_NE(nullptr, findChild(x_axis, "X Max"));
 
   auto * y_axis = Plot2DDisplayTestAccessor::yAxisRoot(display);
   EXPECT_NE(nullptr, findChild(y_axis, "Auto Scale"));
@@ -358,6 +371,7 @@ TEST(Plot2DDisplay, BooleanPropertiesUseCheckboxEditing)
     Plot2DDisplayTestAccessor::pausePlot(display),
     Plot2DDisplayTestAccessor::clearHistory(display),
     findChild(series, "Enabled"),
+    findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Major Grid"),
     findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Minor Grid"),
@@ -381,6 +395,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
 
   findChild(series, "Enabled")->setValue(false);
   findChild(series, "Topic")->setValue("/cmd_vel_out");
+  findChild(series, "X Field")->setValue("linear/y");
   findChild(series, "Field")->setValue("linear/x");
   findChild(series, "Label")->setValue("Linear X");
   findChild(series, "Color")->setValue(QColor(255, 80, 20));
@@ -395,6 +410,10 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   auto * time_source = findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Time Source");
   ASSERT_NE(nullptr, time_source);
   time_source->setValue("Message Header Stamp");
+  findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Mode")->setValue("Field");
+  findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale")->setValue(false);
+  findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "X Min")->setValue(-4.0);
+  findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "X Max")->setValue(4.0);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale")->setValue(false);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Min")->setValue(-2.0);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Max")->setValue(2.0);
@@ -419,6 +438,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   ASSERT_EQ(config.series.size(), 1U);
   EXPECT_FALSE(config.series[0].enabled);
   EXPECT_EQ(config.series[0].topic, "/cmd_vel_out");
+  EXPECT_EQ(config.series[0].x_field, "linear/y");
   EXPECT_EQ(config.series[0].field, "linear/x");
   EXPECT_EQ(config.series[0].label, "Linear X");
   EXPECT_EQ(config.series[0].color.red, 255);
@@ -433,6 +453,10 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.time.window_seconds, 45.0);
   EXPECT_EQ(config.time.refresh_rate_hz, 12.0);
   EXPECT_EQ(config.time.source, TimeSource::HeaderStamp);
+  EXPECT_EQ(config.x_axis.mode, XAxisMode::Field);
+  EXPECT_EQ(config.x_axis.scale_mode, AxisScaleMode::Fixed);
+  EXPECT_EQ(config.x_axis.fixed_min, -4.0);
+  EXPECT_EQ(config.x_axis.fixed_max, 4.0);
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Fixed);
   EXPECT_EQ(config.y_axis.fixed_min, -2.0);
   EXPECT_EQ(config.y_axis.fixed_max, 2.0);

@@ -34,6 +34,12 @@ enum class AxisScaleMode
   Fixed,
 };
 
+enum class XAxisMode
+{
+  Time,
+  Field,
+};
+
 enum class TimeSource
 {
   ReceiveTime,
@@ -42,6 +48,18 @@ enum class TimeSource
 
 struct AxisConfig
 {
+  AxisScaleMode scale_mode{AxisScaleMode::Auto};
+  double fixed_min{-1.0};
+  double fixed_max{1.0};
+  double padding_fraction{0.08};
+
+  bool hasValidFixedRange() const;
+  void repairFixedRange(double fallback_span = 1.0);
+};
+
+struct XAxisConfig
+{
+  XAxisMode mode{XAxisMode::Time};
   AxisScaleMode scale_mode{AxisScaleMode::Auto};
   double fixed_min{-1.0};
   double fixed_max{1.0};
@@ -84,6 +102,7 @@ struct SeriesConfig
 {
   bool enabled{true};
   std::string topic;
+  std::string x_field;
   std::string field;
   std::string label{"Series"};
   SeriesColor color;
@@ -114,6 +133,7 @@ struct Plot2DConfig
 {
   std::vector<SeriesConfig> series{SeriesConfig{}};
   std::vector<ReferenceConfig> references;
+  XAxisConfig x_axis;
   AxisConfig y_axis;
   TimeConfig time;
   LayoutConfig layout;

@@ -24,6 +24,7 @@ using rviz_2d_plot_plugin::RenderableReference;
 using rviz_2d_plot_plugin::RenderableSeries;
 using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::LegendPosition;
+using rviz_2d_plot_plugin::XAxisMode;
 
 namespace
 {
@@ -191,6 +192,37 @@ TEST(Plot2DRenderer, DrawsSeriesSamples)
 
   EXPECT_TRUE(hasDifferentPixel(image, settings.background_color));
   EXPECT_NE(image.pixelColor(1, 1), QColor(Qt::transparent));
+}
+
+TEST(Plot2DRenderer, UsesSampleXValuesInFieldXAxisMode)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 20.0;
+  settings.window_seconds = 5.0;
+  settings.x_axis_mode = XAxisMode::Field;
+  settings.x_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_x_min = 0.0;
+  settings.fixed_x_max = 10.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries series;
+  series.label = "XY";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{
+    PlotSample{20.0, 2.0, 0.0},
+    PlotSample{20.5, 8.0, 0.0}};
+
+  const QImage image = renderer.render(settings, {series});
+
+  EXPECT_GT(
+    countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(90, 70, 160, 30)),
+    0);
 }
 
 TEST(Plot2DRenderer, AppliesConfiguredLineWidth)

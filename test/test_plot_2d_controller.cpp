@@ -20,6 +20,7 @@ using rviz_2d_plot_plugin::Plot2DController;
 using rviz_2d_plot_plugin::PlotControllerStatus;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
+using rviz_2d_plot_plugin::XAxisMode;
 
 namespace
 {
@@ -131,6 +132,33 @@ TEST(Plot2DController, UsesMessageHeaderStampWhenConfigured)
   ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 12.25);
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 3.5);
+}
+
+TEST(Plot2DController, ExtractsSameTopicXAndYFieldsInFieldXAxisMode)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/pose", {"geometry_msgs/msg/PoseStamped"}}};
+  Plot2DConfig config;
+  config.x_axis.mode = XAxisMode::Field;
+  config.series[0].topic = "/pose";
+  config.series[0].x_field = "pose/position/x";
+  config.series[0].field = "pose/position/y";
+  config.time.window_seconds = 10.0;
+  controller.configure(config, topics);
+
+  geometry_msgs::msg::PoseStamped message;
+  message.pose.position.x = 2.5;
+  message.pose.position.y = -1.25;
+  rclcpp::Serialization<geometry_msgs::msg::PoseStamped> serializer;
+  rclcpp::SerializedMessage serialized;
+  serializer.serialize_message(&message, &serialized);
+
+  EXPECT_TRUE(controller.appendSerializedMessage("/pose", serialized, 20.0));
+
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 20.0);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().x, 2.5);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, -1.25);
 }
 
 TEST(Plot2DController, FallsBackToReceiveTimeWhenHeaderStampIsUnavailable)

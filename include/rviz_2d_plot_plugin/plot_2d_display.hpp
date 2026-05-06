@@ -109,6 +109,7 @@ private:
     rviz_common::properties::Property * root{nullptr};
     rviz_common::properties::BoolProperty * enabled{nullptr};
     rviz_common::properties::EditableEnumProperty * topic{nullptr};
+    rviz_common::properties::EditableEnumProperty * x_field{nullptr};
     rviz_common::properties::EditableEnumProperty * field{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
     rviz_common::properties::ColorProperty * color{nullptr};
@@ -171,6 +172,11 @@ private:
   rviz_common::properties::EnumProperty * time_source_property_{nullptr};
   rviz_common::properties::FloatProperty * window_seconds_property_{nullptr};
   rviz_common::properties::FloatProperty * refresh_rate_property_{nullptr};
+  rviz_common::properties::Property * x_axis_root_property_{nullptr};
+  rviz_common::properties::EnumProperty * x_axis_mode_property_{nullptr};
+  rviz_common::properties::BoolProperty * x_auto_scale_property_{nullptr};
+  rviz_common::properties::FloatProperty * x_min_property_{nullptr};
+  rviz_common::properties::FloatProperty * x_max_property_{nullptr};
   rviz_common::properties::Property * y_axis_root_property_{nullptr};
   rviz_common::properties::BoolProperty * auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};

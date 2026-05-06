@@ -12,9 +12,31 @@
 namespace rviz_2d_plot_plugin
 {
 
+PlotSample::PlotSample(const double sample_time, const double sample_value)
+: time(sample_time),
+  x(sample_time),
+  value(sample_value)
+{
+}
+
+PlotSample::PlotSample(
+  const double sample_time,
+  const double sample_x,
+  const double sample_value)
+: time(sample_time),
+  x(sample_x),
+  value(sample_value)
+{
+}
+
 void RollingSampleBuffer::append(const double time, const double value)
 {
   samples_.push_back(PlotSample{time, value});
+}
+
+void RollingSampleBuffer::append(const double time, const double x, const double value)
+{
+  samples_.push_back(PlotSample{time, x, value});
 }
 
 void RollingSampleBuffer::pruneBefore(const double minimum_time)
@@ -78,6 +100,20 @@ std::optional<PlotSample> RollingSampleBuffer::latest() const
     return std::nullopt;
   }
   return samples_.back();
+}
+
+std::optional<ValueRange> RollingSampleBuffer::xRange() const
+{
+  if (samples_.empty()) {
+    return std::nullopt;
+  }
+
+  ValueRange range{samples_.front().x, samples_.front().x};
+  for (const PlotSample & sample : samples_) {
+    range.min = std::min(range.min, sample.x);
+    range.max = std::max(range.max, sample.x);
+  }
+  return range;
 }
 
 std::optional<ValueRange> RollingSampleBuffer::valueRange() const

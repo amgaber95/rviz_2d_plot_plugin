@@ -55,6 +55,11 @@ struct PlotRenderSettings
   int height{220};
   double now{0.0};
   double window_seconds{30.0};
+  XAxisMode x_axis_mode{XAxisMode::Time};
+  AxisScaleMode x_scale_mode{AxisScaleMode::Auto};
+  double fixed_x_min{-1.0};
+  double fixed_x_max{1.0};
+  double x_padding_fraction{0.08};
   AxisScaleMode y_scale_mode{AxisScaleMode::Auto};
   double fixed_y_min{-1.0};
   double fixed_y_max{1.0};

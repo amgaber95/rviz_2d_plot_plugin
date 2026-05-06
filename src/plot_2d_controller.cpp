@@ -116,9 +116,11 @@ void Plot2DController::configure(
   config_.repair();
   state_ = Plot2DControllerState{};
   extractors_.clear();
+  x_extractors_.clear();
   header_stamp_extractors_.clear();
   state_.series.reserve(config_.series.size());
   extractors_.reserve(config_.series.size());
+  x_extractors_.reserve(config_.series.size());
   header_stamp_extractors_.reserve(config_.series.size());
 
   for (const SeriesConfig & series : config_.series) {
@@ -131,6 +133,7 @@ void Plot2DController::configure(
       series_state.message = "Series is disabled";
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
+      x_extractors_.push_back(nullptr);
       header_stamp_extractors_.push_back({});
       continue;
     }
@@ -144,6 +147,7 @@ void Plot2DController::configure(
       setResolutionError(series_state, resolution);
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
+      x_extractors_.push_back(nullptr);
       header_stamp_extractors_.push_back({});
       continue;
     }
@@ -155,8 +159,43 @@ void Plot2DController::configure(
       series_state.message = extractor->error();
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
+      x_extractors_.push_back(nullptr);
       header_stamp_extractors_.push_back({});
       continue;
+    }
+
+    std::unique_ptr<GenericFieldExtractor> x_extractor;
+    if (config_.x_axis.mode == XAxisMode::Field) {
+      const PlotPathResolution x_resolution =
+        resolveTopicFieldPath(series.topic, series.x_field, topics);
+      if (x_resolution.status != PlotPathStatus::Ok ||
+        x_resolution.topic != resolution.topic ||
+        x_resolution.type != resolution.type)
+      {
+        setResolutionError(series_state, x_resolution);
+        if (series_state.message.empty()) {
+          series_state.message = "X field must resolve to the same topic and type";
+        } else {
+          series_state.message = "X field: " + series_state.message;
+        }
+        state_.series.push_back(std::move(series_state));
+        extractors_.push_back(nullptr);
+        x_extractors_.push_back(nullptr);
+        header_stamp_extractors_.push_back({});
+        continue;
+      }
+
+      x_extractor = std::make_unique<GenericFieldExtractor>(
+        x_resolution.type, x_resolution.field_segments);
+      if (!x_extractor->ready()) {
+        series_state.status = PlotControllerStatus::ExtractorError;
+        series_state.message = "X field: " + x_extractor->error();
+        state_.series.push_back(std::move(series_state));
+        extractors_.push_back(nullptr);
+        x_extractors_.push_back(nullptr);
+        header_stamp_extractors_.push_back({});
+        continue;
+      }
     }
 
     series_state.status = PlotControllerStatus::Ok;
@@ -167,6 +206,8 @@ void Plot2DController::configure(
       previous_state.series[series_index].topic == resolution.topic &&
       previous_state.series[series_index].type == resolution.type &&
       previous_config.series[series_index].field == series.field &&
+      previous_config.series[series_index].x_field == series.x_field &&
+      previous_config.x_axis.mode == config_.x_axis.mode &&
       previous_config.time.source == config_.time.source)
     {
       series_state.samples = previous_state.series[series_index].samples;
@@ -184,6 +225,7 @@ void Plot2DController::configure(
     }
     state_.series.push_back(std::move(series_state));
     extractors_.push_back(std::move(extractor));
+    x_extractors_.push_back(std::move(x_extractor));
     header_stamp_extractors_.push_back(
       config_.time.source == TimeSource::HeaderStamp ?
       makeHeaderStampExtractor(resolution.type) : HeaderStampExtractor{});
@@ -228,9 +270,23 @@ bool Plot2DController::appendSerializedMessage(
       }
     }
 
+    double x_value = sample_time;
+    if (config_.x_axis.mode == XAxisMode::Field) {
+      if (i >= x_extractors_.size() || !x_extractors_[i]) {
+        continue;
+      }
+      const FieldExtractionResult x_result = x_extractors_[i]->extract(serialized);
+      if (x_result.status != FieldExtractionStatus::Ok || !x_result.value.has_value()) {
+        series.status = PlotControllerStatus::ExtractionError;
+        series.message = "X field: " + x_result.message;
+        continue;
+      }
+      x_value = x_result.value.value();
+    }
+
     const double transformed_value =
       result.value.value() * config_.series[i].value_scale + config_.series[i].value_offset;
-    series.samples.append(sample_time, transformed_value);
+    series.samples.append(sample_time, x_value, transformed_value);
     series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
     series.latest_value = transformed_value;
     appended = true;

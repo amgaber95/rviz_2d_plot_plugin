@@ -86,6 +86,7 @@ private:
   Plot2DConfig config_;
   Plot2DControllerState state_;
   std::vector<std::unique_ptr<GenericFieldExtractor>> extractors_;
+  std::vector<std::unique_ptr<GenericFieldExtractor>> x_extractors_;
   std::vector<HeaderStampExtractor> header_stamp_extractors_;
 };
 

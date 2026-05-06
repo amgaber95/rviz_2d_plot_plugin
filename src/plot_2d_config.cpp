@@ -29,6 +29,23 @@ void AxisConfig::repairFixedRange(const double fallback_span)
   fixed_max = center + span * 0.5;
 }
 
+bool XAxisConfig::hasValidFixedRange() const
+{
+  return std::isfinite(fixed_min) && std::isfinite(fixed_max) && fixed_min < fixed_max;
+}
+
+void XAxisConfig::repairFixedRange(const double fallback_span)
+{
+  if (hasValidFixedRange()) {
+    return;
+  }
+
+  const double center = std::isfinite(fixed_min) ? fixed_min : 0.0;
+  const double span = std::max(std::abs(fallback_span), 1.0);
+  fixed_min = center - span * 0.5;
+  fixed_max = center + span * 0.5;
+}
+
 void TimeConfig::repair()
 {
   if (!std::isfinite(window_seconds) || window_seconds <= 0.0) {
@@ -99,6 +116,7 @@ void Plot2DConfig::repair()
   }
 
   y_axis.repairFixedRange();
+  x_axis.repairFixedRange();
   time.repair();
   layout.repair();
 }

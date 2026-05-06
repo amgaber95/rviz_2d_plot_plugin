@@ -22,13 +22,32 @@ TEST(RollingSampleBuffer, AppendsSamplesAndReportsLatest)
   ASSERT_EQ(buffer.size(), 2u);
   EXPECT_FALSE(buffer.empty());
   EXPECT_DOUBLE_EQ(buffer.samples()[0].time, 1.0);
+  EXPECT_DOUBLE_EQ(buffer.samples()[0].x, 1.0);
   EXPECT_DOUBLE_EQ(buffer.samples()[0].value, 10.0);
   EXPECT_DOUBLE_EQ(buffer.samples()[1].time, 2.0);
+  EXPECT_DOUBLE_EQ(buffer.samples()[1].x, 2.0);
   EXPECT_DOUBLE_EQ(buffer.samples()[1].value, 12.5);
 
   ASSERT_TRUE(buffer.latest().has_value());
   EXPECT_DOUBLE_EQ(buffer.latest()->time, 2.0);
+  EXPECT_DOUBLE_EQ(buffer.latest()->x, 2.0);
   EXPECT_DOUBLE_EQ(buffer.latest()->value, 12.5);
+}
+
+TEST(RollingSampleBuffer, AppendsSamplesWithExplicitXValues)
+{
+  RollingSampleBuffer buffer;
+
+  buffer.append(10.0, 1.5, 4.0);
+  buffer.append(11.0, 2.5, 6.0);
+
+  ASSERT_EQ(buffer.size(), 2u);
+  EXPECT_DOUBLE_EQ(buffer.samples()[0].time, 10.0);
+  EXPECT_DOUBLE_EQ(buffer.samples()[0].x, 1.5);
+  EXPECT_DOUBLE_EQ(buffer.samples()[0].value, 4.0);
+  ASSERT_TRUE(buffer.xRange().has_value());
+  EXPECT_DOUBLE_EQ(buffer.xRange()->min, 1.5);
+  EXPECT_DOUBLE_EQ(buffer.xRange()->max, 2.5);
 }
 
 TEST(RollingSampleBuffer, PrunesSamplesOlderThanCutoff)

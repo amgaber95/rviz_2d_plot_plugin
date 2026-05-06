@@ -53,7 +53,8 @@ double mapY(const QRectF & rect, const PlotRange & range, const double value)
 
 std::vector<PlotSample> visibleSamples(
   const std::vector<RenderableSeries> & series,
-  const PlotRange & time_range)
+  const PlotRange & time_range,
+  const XAxisMode x_axis_mode)
 {
   std::vector<PlotSample> samples;
   for (const RenderableSeries & item : series) {
@@ -61,7 +62,9 @@ std::vector<PlotSample> visibleSamples(
       continue;
     }
     for (const PlotSample & sample : item.samples) {
-      if (sample.time >= time_range.min && sample.time <= time_range.max) {
+      if (x_axis_mode == XAxisMode::Field ||
+        (sample.time >= time_range.min && sample.time <= time_range.max))
+      {
         samples.push_back(sample);
       }
     }
@@ -77,6 +80,26 @@ PlotRange yRangeForSettings(
     return makeFixedRange(settings.fixed_y_min, settings.fixed_y_max);
   }
   return makeAutoRange(samples, settings.y_padding_fraction);
+}
+
+PlotRange xRangeForSettings(
+  const PlotRenderSettings & settings,
+  const std::vector<PlotSample> & samples)
+{
+  if (settings.x_axis_mode == XAxisMode::Time) {
+    return PlotRange{settings.now - settings.window_seconds, settings.now};
+  }
+
+  if (settings.x_scale_mode == AxisScaleMode::Fixed) {
+    return makeFixedRange(settings.fixed_x_min, settings.fixed_x_max);
+  }
+
+  std::vector<PlotSample> x_samples;
+  x_samples.reserve(samples.size());
+  for (const PlotSample & sample : samples) {
+    x_samples.push_back(PlotSample{sample.time, sample.x});
+  }
+  return makeAutoRange(x_samples, settings.x_padding_fraction);
 }
 
 std::string formatValue(const double value)
@@ -169,10 +192,13 @@ void drawGrid(
 
   for (const double tick : x_ticks.major) {
     const double x = mapX(rect, x_range, tick);
+    const QString label = settings.x_axis_mode == XAxisMode::Time ?
+      formatTimeOffset(tick - settings.now) :
+      QString::fromStdString(formatValue(tick));
     painter.drawText(
       QRectF(x - 30.0, rect.bottom() + 4.0, 60.0, 18.0),
       Qt::AlignHCenter | Qt::AlignVCenter,
-      formatTimeOffset(tick - settings.now));
+      label);
   }
 }
 
@@ -197,11 +223,11 @@ void drawSeries(
 
   std::vector<QPointF> points;
   for (const PlotSample & sample : series.samples) {
-    if (sample.time < x_range.min || sample.time > x_range.max) {
+    if (sample.x < x_range.min || sample.x > x_range.max) {
       continue;
     }
     points.emplace_back(
-      mapX(rect, x_range, sample.time),
+      mapX(rect, x_range, sample.x),
       mapY(rect, y_range, sample.value));
   }
 
@@ -290,7 +316,10 @@ void drawLegend(
 
     auto latest = std::find_if(
       item.samples.rbegin(), item.samples.rend(),
-      [&x_range](const PlotSample & sample) {
+      [&x_range, &settings](const PlotSample & sample) {
+        if (settings.x_axis_mode == XAxisMode::Field) {
+          return sample.x >= x_range.min && sample.x <= x_range.max;
+        }
         return sample.time >= x_range.min && sample.time <= x_range.max;
       });
     if (latest == item.samples.rend()) {
@@ -348,10 +377,12 @@ QImage Plot2DRenderer::render(
   image.fill(settings.background_color);
 
   const QRectF rect = plotRect(settings);
-  const PlotRange x_range{
+  const PlotRange time_range{
     settings.now - settings.window_seconds,
     settings.now};
-  const std::vector<PlotSample> samples = visibleSamples(series, x_range);
+  const std::vector<PlotSample> samples = visibleSamples(
+    series, time_range, settings.x_axis_mode);
+  const PlotRange x_range = xRangeForSettings(settings, samples);
   const PlotRange y_range = yRangeForSettings(settings, samples);
 
   QPainter painter(&image);

@@ -16,6 +16,7 @@ using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::TimeSource;
+using rviz_2d_plot_plugin::XAxisMode;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
 {
@@ -24,6 +25,7 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   ASSERT_EQ(config.series.size(), 1u);
   EXPECT_TRUE(config.series.front().enabled);
   EXPECT_EQ(config.series.front().topic, "");
+  EXPECT_EQ(config.series.front().x_field, "");
   EXPECT_EQ(config.series.front().field, "");
   EXPECT_EQ(config.series.front().label, "Series");
   EXPECT_EQ(config.series.front().color.red, 80);
@@ -40,6 +42,11 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_DOUBLE_EQ(config.y_axis.fixed_min, -1.0);
   EXPECT_DOUBLE_EQ(config.y_axis.fixed_max, 1.0);
   EXPECT_DOUBLE_EQ(config.y_axis.padding_fraction, 0.08);
+
+  EXPECT_EQ(config.x_axis.mode, XAxisMode::Time);
+  EXPECT_EQ(config.x_axis.scale_mode, AxisScaleMode::Auto);
+  EXPECT_DOUBLE_EQ(config.x_axis.fixed_min, -1.0);
+  EXPECT_DOUBLE_EQ(config.x_axis.fixed_max, 1.0);
 
   EXPECT_DOUBLE_EQ(config.time.window_seconds, 30.0);
   EXPECT_DOUBLE_EQ(config.time.refresh_rate_hz, 20.0);
@@ -66,6 +73,19 @@ TEST(Plot2DConfig, RepairsInvalidFixedAxisRange)
   EXPECT_LT(axis.fixed_min, axis.fixed_max);
   EXPECT_DOUBLE_EQ(axis.fixed_min, 4.5);
   EXPECT_DOUBLE_EQ(axis.fixed_max, 5.5);
+}
+
+TEST(Plot2DConfig, RepairsInvalidFixedXAxisRange)
+{
+  Plot2DConfig config;
+  config.x_axis.mode = XAxisMode::Field;
+  config.x_axis.scale_mode = AxisScaleMode::Fixed;
+  config.x_axis.fixed_min = 8.0;
+  config.x_axis.fixed_max = 8.0;
+
+  config.repair();
+
+  EXPECT_LT(config.x_axis.fixed_min, config.x_axis.fixed_max);
 }
 
 TEST(Plot2DConfig, RepairsInvalidTimeAndLayoutValues)

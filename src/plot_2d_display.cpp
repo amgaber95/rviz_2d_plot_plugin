@@ -200,6 +200,34 @@ void addTimeSourceOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(timeSourceName(TimeSource::HeaderStamp));
 }
 
+std::string xAxisModeName(const XAxisMode mode)
+{
+  switch (mode) {
+    case XAxisMode::Time:
+      return "Time";
+    case XAxisMode::Field:
+      return "Field";
+  }
+  return "Time";
+}
+
+XAxisMode xAxisModeFromName(const std::string & name)
+{
+  if (name == "Field") {
+    return XAxisMode::Field;
+  }
+  return XAxisMode::Time;
+}
+
+void addXAxisModeOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(xAxisModeName(XAxisMode::Time));
+  property->addOptionStd(xAxisModeName(XAxisMode::Field));
+}
+
 std::string legendPositionName(const LegendPosition position)
 {
   switch (position) {
@@ -361,6 +389,23 @@ Plot2DDisplay::Plot2DDisplay()
     "Refresh Rate", 20.0F, "Overlay redraw rate in Hz.", time_root_property_,
     SLOT(onConfigPropertyChanged()), this);
   refresh_rate_property_->setMin(1.0F);
+
+  x_axis_root_property_ = new rviz_common::properties::Property(
+    "X Axis", QVariant(), "Horizontal axis source and scaling.", this);
+  x_axis_mode_property_ = new rviz_common::properties::EnumProperty(
+    "Mode", QString::fromStdString(xAxisModeName(XAxisMode::Time)),
+    "Use time or a numeric message field for the x-axis.",
+    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addXAxisModeOptions(x_axis_mode_property_);
+  x_auto_scale_property_ = new rviz_common::properties::BoolProperty(
+    "Auto Scale", true, "Automatically fit field-mode x-axis values.",
+    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+  x_min_property_ = new rviz_common::properties::FloatProperty(
+    "X Min", -1.0F, "Fixed x-axis minimum when field mode auto scale is disabled.",
+    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+  x_max_property_ = new rviz_common::properties::FloatProperty(
+    "X Max", 1.0F, "Fixed x-axis maximum when field mode auto scale is disabled.",
+    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
 
   y_axis_root_property_ = new rviz_common::properties::Property(
     "Y Axis", QVariant(), "Vertical value axis scaling.", this);
@@ -629,6 +674,7 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     SeriesConfig config;
     config.enabled = properties.enabled && properties.enabled->getBool();
     config.topic = properties.topic ? properties.topic->getStdString() : "";
+    config.x_field = properties.x_field ? properties.x_field->getStdString() : "";
     config.field = properties.field ? properties.field->getStdString() : "";
     config.label = properties.label ? properties.label->getStdString() : "Series";
     config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
@@ -677,6 +723,13 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.time.paused = pause_plot_property_->getBool();
   config.time.source = time_source_property_ ?
     timeSourceFromName(time_source_property_->getStdString()) : TimeSource::ReceiveTime;
+
+  config.x_axis.mode = x_axis_mode_property_ ?
+    xAxisModeFromName(x_axis_mode_property_->getStdString()) : XAxisMode::Time;
+  config.x_axis.scale_mode = x_auto_scale_property_->getBool() ?
+    AxisScaleMode::Auto : AxisScaleMode::Fixed;
+  config.x_axis.fixed_min = x_min_property_->getFloat();
+  config.x_axis.fixed_max = x_max_property_->getFloat();
 
   config.y_axis.scale_mode = auto_scale_property_->getBool() ?
     AxisScaleMode::Auto : AxisScaleMode::Fixed;
@@ -734,6 +787,15 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       properties.root, SLOT(onConfigPropertyChanged()), this);
     QObject::connect(
       properties.field,
+      &rviz_common::properties::EditableEnumProperty::requestOptions,
+      this,
+      &Plot2DDisplay::onFieldOptionsRequested);
+    properties.x_field = new rviz_common::properties::EditableEnumProperty(
+      "X Field", QString::fromStdString(value.x_field),
+      "Numeric field used for the x-axis when X Axis Mode is Field.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    QObject::connect(
+      properties.x_field,
       &rviz_common::properties::EditableEnumProperty::requestOptions,
       this,
       &Plot2DDisplay::onFieldOptionsRequested);
@@ -852,7 +914,7 @@ const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField
   rviz_common::properties::EditableEnumProperty * property) const
 {
   for (const SeriesPropertySet & series : series_properties_) {
-    if (series.field == property) {
+    if (series.field == property || series.x_field == property) {
       return &series;
     }
   }
@@ -947,6 +1009,11 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.height = config.layout.height;
   settings.window_seconds = config.time.window_seconds;
   settings.now = receiveNowSeconds_();
+  settings.x_axis_mode = config.x_axis.mode;
+  settings.x_scale_mode = config.x_axis.scale_mode;
+  settings.fixed_x_min = config.x_axis.fixed_min;
+  settings.fixed_x_max = config.x_axis.fixed_max;
+  settings.x_padding_fraction = config.x_axis.padding_fraction;
   settings.y_scale_mode = config.y_axis.scale_mode;
   settings.fixed_y_min = config.y_axis.fixed_min;
   settings.fixed_y_max = config.y_axis.fixed_max;
