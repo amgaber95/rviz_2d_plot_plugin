@@ -7,10 +7,13 @@
 #include "rviz_2d_plot_plugin/plot_2d_display.hpp"
 
 #include <QColor>
+#include <QComboBox>
+#include <QCompleter>
 #include <QImage>
 #include <QObject>
 #include <QPainter>
 #include <QSignalBlocker>
+#include <QStyleOptionViewItem>
 #include <QVariant>
 
 #include <algorithm>
@@ -39,6 +42,28 @@ namespace rviz_2d_plot_plugin
 {
 namespace
 {
+
+class ContainsFilterEditableEnumProperty
+  : public rviz_common::properties::EditableEnumProperty
+{
+public:
+  using rviz_common::properties::EditableEnumProperty::EditableEnumProperty;
+
+  QWidget * createEditor(
+    QWidget * parent,
+    const QStyleOptionViewItem & option) override
+  {
+    QWidget * editor =
+      rviz_common::properties::EditableEnumProperty::createEditor(parent, option);
+    auto * combo_box = qobject_cast<QComboBox *>(editor);
+    if (combo_box && combo_box->completer()) {
+      combo_box->completer()->setCompletionMode(QCompleter::PopupCompletion);
+      combo_box->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+      combo_box->completer()->setFilterMode(Qt::MatchContains);
+    }
+    return editor;
+  }
+};
 
 rviz_common::properties::StatusProperty::Level statusLevel(
   const PlotControllerStatus status)
@@ -844,7 +869,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     properties.enabled = new rviz_common::properties::BoolProperty(
       "Enabled", value.enabled, "Enable this series.", properties.root,
       SLOT(onConfigPropertyChanged()), this);
-    properties.topic = new rviz_common::properties::EditableEnumProperty(
+    properties.topic = new ContainsFilterEditableEnumProperty(
       "Topic", QString::fromStdString(value.topic), "ROS 2 topic to subscribe to.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
     QObject::connect(
@@ -852,7 +877,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       &rviz_common::properties::EditableEnumProperty::requestOptions,
       this,
       &Plot2DDisplay::onTopicOptionsRequested);
-    properties.field = new rviz_common::properties::EditableEnumProperty(
+    properties.field = new ContainsFilterEditableEnumProperty(
       "Field", QString::fromStdString(value.field),
       "Numeric or boolean field path inside the selected message.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
@@ -861,7 +886,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       &rviz_common::properties::EditableEnumProperty::requestOptions,
       this,
       &Plot2DDisplay::onFieldOptionsRequested);
-    properties.x_field = new rviz_common::properties::EditableEnumProperty(
+    properties.x_field = new ContainsFilterEditableEnumProperty(
       "X Field", QString::fromStdString(value.x_field),
       "Numeric field used for the x-axis when X Axis Mode is Field.",
       properties.root, SLOT(onConfigPropertyChanged()), this);

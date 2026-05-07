@@ -5,7 +5,10 @@
 // https://opensource.org/licenses/MIT.
 
 #include <QApplication>
+#include <QComboBox>
+#include <QCompleter>
 #include <QString>
+#include <QStyleOptionViewItem>
 #include <Qt>
 
 #include <gtest/gtest.h>
@@ -235,6 +238,20 @@ std::vector<QString> childNames(rviz_common::properties::Property * parent)
     }
   }
   return names;
+}
+
+std::vector<QString> completionsFor(QCompleter * completer, const QString & prefix)
+{
+  std::vector<QString> completions;
+  if (!completer) {
+    return completions;
+  }
+
+  completer->setCompletionPrefix(prefix);
+  for (int row = 0; completer->setCurrentRow(row); ++row) {
+    completions.push_back(completer->currentCompletion());
+  }
+  return completions;
 }
 
 template<typename MessageT>
@@ -901,4 +918,49 @@ TEST(Plot2DDisplay, FieldOptionsListNumericScalarsForSelectedTopic)
   EXPECT_NE(std::find(options.begin(), options.end(), "angular/z"), options.end());
   EXPECT_EQ(
     Plot2DDisplayTestAccessor::fieldOptions(display, "/missing").size(), 0U);
+}
+
+TEST(Plot2DDisplay, TopicAndFieldEditorsFilterOptionsByContainsWhileTyping)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  Plot2DDisplayTestAccessor::setTopics(
+    display,
+    TopicTypeMap{{"/cmd_vel_out", {"geometry_msgs/msg/Twist"}}});
+
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  auto * topic_property =
+    qobject_cast<rviz_common::properties::EditableEnumProperty *>(
+    findChild(series, "Topic"));
+  ASSERT_NE(nullptr, topic_property);
+
+  QStyleOptionViewItem option;
+  std::unique_ptr<QWidget> topic_editor(topic_property->createEditor(nullptr, option));
+  auto * topic_combo = qobject_cast<QComboBox *>(topic_editor.get());
+  ASSERT_NE(nullptr, topic_combo);
+  ASSERT_NE(nullptr, topic_combo->completer());
+  EXPECT_EQ(topic_combo->completer()->filterMode(), Qt::MatchContains);
+  const std::vector<QString> topic_completions =
+    completionsFor(topic_combo->completer(), "cmd");
+  EXPECT_NE(
+    std::find(topic_completions.begin(), topic_completions.end(), "/cmd_vel_out"),
+    topic_completions.end());
+
+  topic_property->setValue("/cmd_vel_out");
+  auto * field_property =
+    qobject_cast<rviz_common::properties::EditableEnumProperty *>(
+    findChild(series, "Field"));
+  ASSERT_NE(nullptr, field_property);
+
+  std::unique_ptr<QWidget> field_editor(field_property->createEditor(nullptr, option));
+  auto * field_combo = qobject_cast<QComboBox *>(field_editor.get());
+  ASSERT_NE(nullptr, field_combo);
+  ASSERT_NE(nullptr, field_combo->completer());
+  EXPECT_EQ(field_combo->completer()->filterMode(), Qt::MatchContains);
+  const std::vector<QString> field_completions =
+    completionsFor(field_combo->completer(), "x");
+  EXPECT_NE(
+    std::find(field_completions.begin(), field_completions.end(), "linear/x"),
+    field_completions.end());
 }
