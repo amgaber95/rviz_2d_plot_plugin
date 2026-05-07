@@ -246,9 +246,7 @@ bool Plot2DController::appendSerializedMessage(
   bool appended = false;
   for (std::size_t i = 0; i < state_.series.size() && i < extractors_.size(); ++i) {
     PlotSeriesControllerState & series = state_.series[i];
-    if (topic != series.topic || series.status != PlotControllerStatus::Ok ||
-      !extractors_[i])
-    {
+    if (topic != series.topic || !extractors_[i]) {
       continue;
     }
 
@@ -286,6 +284,8 @@ bool Plot2DController::appendSerializedMessage(
 
     const double transformed_value =
       result.value.value() * config_.series[i].value_scale + config_.series[i].value_offset;
+    series.status = PlotControllerStatus::Ok;
+    series.message.clear();
     series.samples.append(sample_time, x_value, transformed_value);
     series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
     series.latest_value = transformed_value;

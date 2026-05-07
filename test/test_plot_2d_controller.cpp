@@ -97,6 +97,24 @@ TEST(Plot2DController, AppendsExtractedSamplesAndPrunesToWindow)
   EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 2.5);
 }
 
+TEST(Plot2DController, RecoversFromTransientExtractionErrorOnNextValidMessage)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  controller.configure(makeConfig(), topics);
+
+  rclcpp::SerializedMessage malformed;
+  EXPECT_FALSE(controller.appendSerializedMessage("/cmd_vel", malformed, 10.0));
+  ASSERT_EQ(controller.state().series[0].status, PlotControllerStatus::ExtractionError);
+
+  EXPECT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(2.5), 11.0));
+
+  EXPECT_EQ(controller.state().series[0].status, PlotControllerStatus::Ok);
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 11.0);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 2.5);
+}
+
 TEST(Plot2DController, AppliesSeriesScaleAndOffsetToExtractedSamples)
 {
   Plot2DController controller;
