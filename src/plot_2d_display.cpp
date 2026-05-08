@@ -253,6 +253,102 @@ void addXAxisModeOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(xAxisModeName(XAxisMode::Field));
 }
 
+std::string horizontalAlignmentName(const HorizontalAlignment alignment)
+{
+  switch (alignment) {
+    case HorizontalAlignment::Left:
+      return "Left";
+    case HorizontalAlignment::Center:
+      return "Center";
+    case HorizontalAlignment::Right:
+      return "Right";
+  }
+  return "Right";
+}
+
+HorizontalAlignment horizontalAlignmentFromName(const std::string & name)
+{
+  if (name == "Left") {
+    return HorizontalAlignment::Left;
+  }
+  if (name == "Center") {
+    return HorizontalAlignment::Center;
+  }
+  return HorizontalAlignment::Right;
+}
+
+void addHorizontalAlignmentOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(horizontalAlignmentName(HorizontalAlignment::Left));
+  property->addOptionStd(horizontalAlignmentName(HorizontalAlignment::Center));
+  property->addOptionStd(horizontalAlignmentName(HorizontalAlignment::Right));
+}
+
+std::string verticalAlignmentName(const VerticalAlignment alignment)
+{
+  switch (alignment) {
+    case VerticalAlignment::Top:
+      return "Top";
+    case VerticalAlignment::Center:
+      return "Center";
+    case VerticalAlignment::Bottom:
+      return "Bottom";
+  }
+  return "Top";
+}
+
+VerticalAlignment verticalAlignmentFromName(const std::string & name)
+{
+  if (name == "Center") {
+    return VerticalAlignment::Center;
+  }
+  if (name == "Bottom") {
+    return VerticalAlignment::Bottom;
+  }
+  return VerticalAlignment::Top;
+}
+
+void addVerticalAlignmentOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(verticalAlignmentName(VerticalAlignment::Top));
+  property->addOptionStd(verticalAlignmentName(VerticalAlignment::Center));
+  property->addOptionStd(verticalAlignmentName(VerticalAlignment::Bottom));
+}
+
+rviz_2d_overlay_plugins::HorizontalAlignment toOverlayHorizontalAlignment(
+  const HorizontalAlignment alignment)
+{
+  switch (alignment) {
+    case HorizontalAlignment::Left:
+      return rviz_2d_overlay_plugins::HorizontalAlignment::LEFT;
+    case HorizontalAlignment::Center:
+      return rviz_2d_overlay_plugins::HorizontalAlignment::CENTER;
+    case HorizontalAlignment::Right:
+      return rviz_2d_overlay_plugins::HorizontalAlignment::RIGHT;
+  }
+  return rviz_2d_overlay_plugins::HorizontalAlignment::RIGHT;
+}
+
+rviz_2d_overlay_plugins::VerticalAlignment toOverlayVerticalAlignment(
+  const VerticalAlignment alignment)
+{
+  switch (alignment) {
+    case VerticalAlignment::Top:
+      return rviz_2d_overlay_plugins::VerticalAlignment::TOP;
+    case VerticalAlignment::Center:
+      return rviz_2d_overlay_plugins::VerticalAlignment::CENTER;
+    case VerticalAlignment::Bottom:
+      return rviz_2d_overlay_plugins::VerticalAlignment::BOTTOM;
+  }
+  return rviz_2d_overlay_plugins::VerticalAlignment::TOP;
+}
+
 constexpr const char * kNoSeriesAction = "None";
 
 void addSeriesActionOptions(rviz_common::properties::EnumProperty * property)
@@ -513,6 +609,18 @@ Plot2DDisplay::Plot2DDisplay()
   y_offset_property_ = new rviz_common::properties::IntProperty(
     "Y Offset", 10, "Vertical screen offset in pixels.", layout_root_property_,
     SLOT(onConfigPropertyChanged()), this);
+  horizontal_alignment_property_ = new rviz_common::properties::EnumProperty(
+    "Horizontal Alignment",
+    QString::fromStdString(horizontalAlignmentName(HorizontalAlignment::Right)),
+    "Horizontal screen anchor used by X Offset.",
+    layout_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addHorizontalAlignmentOptions(horizontal_alignment_property_);
+  vertical_alignment_property_ = new rviz_common::properties::EnumProperty(
+    "Vertical Alignment",
+    QString::fromStdString(verticalAlignmentName(VerticalAlignment::Top)),
+    "Vertical screen anchor used by Y Offset.",
+    layout_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addVerticalAlignmentOptions(vertical_alignment_property_);
 
   style_root_property_ = new rviz_common::properties::Property(
     "Style", QVariant(), "Plot colors.", this);
@@ -832,6 +940,12 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.layout.height = height_property_->getInt();
   config.layout.x_offset = x_offset_property_->getInt();
   config.layout.y_offset = y_offset_property_->getInt();
+  config.layout.horizontal_alignment = horizontal_alignment_property_ ?
+    horizontalAlignmentFromName(horizontal_alignment_property_->getStdString()) :
+    HorizontalAlignment::Right;
+  config.layout.vertical_alignment = vertical_alignment_property_ ?
+    verticalAlignmentFromName(vertical_alignment_property_->getStdString()) :
+    VerticalAlignment::Top;
   config.repair();
   return config;
 }
@@ -1206,8 +1320,8 @@ void Plot2DDisplay::updateOverlayGeometry_()
   overlay_->setPosition(
     config.layout.x_offset,
     config.layout.y_offset,
-    rviz_2d_overlay_plugins::HorizontalAlignment::RIGHT,
-    rviz_2d_overlay_plugins::VerticalAlignment::TOP);
+    toOverlayHorizontalAlignment(config.layout.horizontal_alignment),
+    toOverlayVerticalAlignment(config.layout.vertical_alignment));
 }
 
 void Plot2DDisplay::renderOverlay_()

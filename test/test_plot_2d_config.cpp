@@ -12,10 +12,12 @@
 
 using rviz_2d_plot_plugin::AxisConfig;
 using rviz_2d_plot_plugin::AxisScaleMode;
+using rviz_2d_plot_plugin::HorizontalAlignment;
 using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::TimeSource;
+using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
@@ -57,6 +59,8 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_EQ(config.layout.height, 220);
   EXPECT_EQ(config.layout.x_offset, 10);
   EXPECT_EQ(config.layout.y_offset, 10);
+  EXPECT_EQ(config.layout.horizontal_alignment, HorizontalAlignment::Right);
+  EXPECT_EQ(config.layout.vertical_alignment, VerticalAlignment::Top);
 
   EXPECT_TRUE(config.references.empty());
 }

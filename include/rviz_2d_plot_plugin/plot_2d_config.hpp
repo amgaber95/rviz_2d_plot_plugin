@@ -46,6 +46,20 @@ enum class TimeSource
   HeaderStamp,
 };
 
+enum class HorizontalAlignment
+{
+  Left,
+  Center,
+  Right,
+};
+
+enum class VerticalAlignment
+{
+  Top,
+  Center,
+  Bottom,
+};
+
 struct AxisConfig
 {
   AxisScaleMode scale_mode{AxisScaleMode::Auto};
@@ -85,6 +99,8 @@ struct LayoutConfig
   int height{220};
   int x_offset{10};
   int y_offset{10};
+  HorizontalAlignment horizontal_alignment{HorizontalAlignment::Right};
+  VerticalAlignment vertical_alignment{VerticalAlignment::Top};
 
   void repair();
 };

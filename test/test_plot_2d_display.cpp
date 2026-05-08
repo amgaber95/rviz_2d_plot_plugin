@@ -186,6 +186,7 @@ namespace
 {
 
 using rviz_2d_plot_plugin::AxisScaleMode;
+using rviz_2d_plot_plugin::HorizontalAlignment;
 using rviz_2d_plot_plugin::LegendPosition;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::PlotControllerStatus;
@@ -193,6 +194,7 @@ using rviz_2d_plot_plugin::Plot2DDisplay;
 using rviz_2d_plot_plugin::Plot2DDisplayTestAccessor;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
+using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
 
 void ensureQtApplication()
@@ -335,6 +337,8 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(layout, "Height"));
   EXPECT_NE(nullptr, findChild(layout, "X Offset"));
   EXPECT_NE(nullptr, findChild(layout, "Y Offset"));
+  EXPECT_NE(nullptr, findChild(layout, "Horizontal Alignment"));
+  EXPECT_NE(nullptr, findChild(layout, "Vertical Alignment"));
 
   auto * style = findChild(&display, "Style");
   ASSERT_NE(nullptr, style);
@@ -450,6 +454,10 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Height")->setValue(180);
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "X Offset")->setValue(20);
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Y Offset")->setValue(30);
+  findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Horizontal Alignment")->setValue(
+    "Center");
+  findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Vertical Alignment")->setValue(
+    "Bottom");
 
   const Plot2DConfig config = Plot2DDisplayTestAccessor::configFromProperties(display);
 
@@ -492,6 +500,8 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.layout.height, 180);
   EXPECT_EQ(config.layout.x_offset, 20);
   EXPECT_EQ(config.layout.y_offset, 30);
+  EXPECT_EQ(config.layout.horizontal_alignment, HorizontalAlignment::Center);
+  EXPECT_EQ(config.layout.vertical_alignment, VerticalAlignment::Bottom);
 }
 
 TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
