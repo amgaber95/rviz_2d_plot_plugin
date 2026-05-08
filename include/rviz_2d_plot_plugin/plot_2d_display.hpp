@@ -24,6 +24,8 @@
 
 namespace rviz_common
 {
+class Config;
+
 namespace properties
 {
 class BoolProperty;
@@ -61,6 +63,7 @@ class Plot2DDisplay : public rviz_common::Display
 public:
   Plot2DDisplay();
   ~Plot2DDisplay() override;
+  void load(const rviz_common::Config & config) override;
 
 protected:
   void onInitialize() override;

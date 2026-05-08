@@ -26,6 +26,7 @@
 
 #include <pluginlib/class_list_macros.hpp>
 #include <rviz_2d_overlay_plugins/overlay_utils.hpp>
+#include <rviz_common/config.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/properties/bool_property.hpp>
 #include <rviz_common/properties/color_property.hpp>
@@ -639,6 +640,22 @@ Plot2DDisplay::Plot2DDisplay()
 }
 
 Plot2DDisplay::~Plot2DDisplay() = default;
+
+void Plot2DDisplay::load(const rviz_common::Config & config)
+{
+  int count = 0;
+  const rviz_common::Config series_config = config.mapGetChild("Series");
+  if (series_config.mapGetInt("Series Count", &count)) {
+    rebuildSeriesProperties_(count, seriesConfigFromProperties_());
+  }
+
+  const rviz_common::Config references_config = config.mapGetChild("References");
+  if (references_config.mapGetInt("Reference Count", &count)) {
+    rebuildReferenceProperties_(count, referenceConfigFromProperties_());
+  }
+
+  rviz_common::Display::load(config);
+}
 
 void Plot2DDisplay::onInitialize()
 {

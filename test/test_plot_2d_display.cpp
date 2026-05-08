@@ -24,6 +24,7 @@
 #include <rclcpp/serialization.hpp>
 #include <std_msgs/msg/float64.hpp>
 
+#include <rviz_common/config.hpp>
 #include <rviz_common/properties/bool_property.hpp>
 #include <rviz_common/properties/color_property.hpp>
 #include <rviz_common/properties/editable_enum_property.hpp>
@@ -681,6 +682,44 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromMultipleSeriesProperties)
   EXPECT_EQ(config.series[1].topic, "/cmd_vel");
   EXPECT_EQ(config.series[1].field, "angular/z");
   EXPECT_EQ(config.series[1].label, "Angular Z");
+}
+
+TEST(Plot2DDisplay, LoadsDynamicSeriesAndReferenceCountsBeforeChildren)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+
+  rviz_common::Config config;
+  auto series = config.mapMakeChild("Series");
+  series.mapSetValue("Series Count", 2);
+  auto series_1 = series.mapMakeChild("Series 1");
+  series_1.mapSetValue("Topic", "/cmd_vel");
+  series_1.mapSetValue("Field", "linear/x");
+  series_1.mapSetValue("Label", "Linear X");
+  auto series_2 = series.mapMakeChild("Series 2");
+  series_2.mapSetValue("Topic", "/cmd_vel");
+  series_2.mapSetValue("Field", "angular/z");
+  series_2.mapSetValue("Label", "Angular Z");
+
+  auto references = config.mapMakeChild("References");
+  references.mapSetValue("Reference Count", 1);
+  auto reference_1 = references.mapMakeChild("Reference 1");
+  reference_1.mapSetValue("Value", 3.0);
+  reference_1.mapSetValue("Label", "Upper Limit");
+
+  display.load(config);
+
+  const Plot2DConfig loaded = Plot2DDisplayTestAccessor::configFromProperties(display);
+  ASSERT_EQ(loaded.series.size(), 2U);
+  EXPECT_EQ(loaded.series[0].topic, "/cmd_vel");
+  EXPECT_EQ(loaded.series[0].field, "linear/x");
+  EXPECT_EQ(loaded.series[0].label, "Linear X");
+  EXPECT_EQ(loaded.series[1].topic, "/cmd_vel");
+  EXPECT_EQ(loaded.series[1].field, "angular/z");
+  EXPECT_EQ(loaded.series[1].label, "Angular Z");
+  ASSERT_EQ(loaded.references.size(), 1U);
+  EXPECT_DOUBLE_EQ(loaded.references[0].value, 3.0);
+  EXPECT_EQ(loaded.references[0].label, "Upper Limit");
 }
 
 TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)
