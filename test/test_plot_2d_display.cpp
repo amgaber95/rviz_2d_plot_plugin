@@ -707,7 +707,9 @@ TEST(Plot2DDisplay, LoadsDynamicSeriesAndReferenceCountsBeforeChildren)
   reference_1.mapSetValue("Value", 3.0);
   reference_1.mapSetValue("Label", "Upper Limit");
 
+  testing::internal::CaptureStdout();
   display.load(config);
+  const std::string load_output = testing::internal::GetCapturedStdout();
 
   const Plot2DConfig loaded = Plot2DDisplayTestAccessor::configFromProperties(display);
   ASSERT_EQ(loaded.series.size(), 2U);
@@ -720,6 +722,7 @@ TEST(Plot2DDisplay, LoadsDynamicSeriesAndReferenceCountsBeforeChildren)
   ASSERT_EQ(loaded.references.size(), 1U);
   EXPECT_DOUBLE_EQ(loaded.references[0].value, 3.0);
   EXPECT_EQ(loaded.references[0].label, "Upper Limit");
+  EXPECT_EQ(load_output.find("unexpected QVariant type"), std::string::npos);
 }
 
 TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)

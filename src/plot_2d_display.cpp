@@ -66,6 +66,28 @@ public:
   }
 };
 
+class ChildOnlyGroupProperty : public rviz_common::properties::Property
+{
+public:
+  using rviz_common::properties::Property::Property;
+
+  void load(const rviz_common::Config & config) override
+  {
+    if (config.getType() != rviz_common::Config::Map) {
+      rviz_common::properties::Property::load(config);
+      return;
+    }
+
+    const int child_count = numChildren();
+    for (int i = 0; i < child_count; ++i) {
+      rviz_common::properties::Property * child = childAt(i);
+      if (child) {
+        child->load(config.mapGetChild(child->getName()));
+      }
+    }
+  }
+};
+
 rviz_common::properties::StatusProperty::Level statusLevel(
   const PlotControllerStatus status)
 {
@@ -1090,7 +1112,7 @@ void Plot2DDisplay::rebuildReferenceProperties_(
 
     ReferencePropertySet properties;
     const QString name = "Reference " + QString::number(i + 1);
-    properties.root = new rviz_common::properties::Property(
+    properties.root = new ChildOnlyGroupProperty(
       name, QVariant(), "Horizontal reference line.", references_root_property_);
     properties.enabled = new rviz_common::properties::BoolProperty(
       "Enabled", value.enabled, "Enable this reference line.", properties.root,
