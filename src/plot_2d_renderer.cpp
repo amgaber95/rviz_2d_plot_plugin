@@ -329,7 +329,7 @@ void drawLegend(
   const PlotRange & x_range,
   const PlotRenderSettings & settings)
 {
-  if (settings.legend_position == LegendPosition::Hidden) {
+  if (!settings.show_legend) {
     return;
   }
 
@@ -359,7 +359,11 @@ void drawLegend(
       continue;
     }
 
-    const QString text = QString::fromStdString(item.label + " " + formatValue(latest->value));
+    QString text = QString::fromStdString(item.label);
+    if (settings.show_latest_values) {
+      text += " ";
+      text += QString::fromStdString(formatValue(latest->value));
+    }
     text_width = std::max(
       text_width,
       static_cast<double>(painter.fontMetrics().horizontalAdvance(text)));
@@ -379,8 +383,10 @@ void drawLegend(
   const bool align_bottom =
     settings.legend_position == LegendPosition::BottomLeft ||
     settings.legend_position == LegendPosition::BottomRight;
-  const double x = align_right ? rect.right() - legend_width - 4.0 : rect.left() + 4.0;
-  double y = align_bottom ? rect.bottom() - legend_height - 4.0 : rect.top() + 4.0;
+  const double x_offset = static_cast<double>(std::max(0, settings.legend_x_offset));
+  const double y_offset = static_cast<double>(std::max(0, settings.legend_y_offset));
+  const double x = align_right ? rect.right() - legend_width - x_offset : rect.left() + x_offset;
+  double y = align_bottom ? rect.bottom() - legend_height - y_offset : rect.top() + y_offset;
 
   for (const LegendEntry & entry : entries) {
     painter.setPen(QPen(entry.color, 2.0));

@@ -455,8 +455,6 @@ std::string legendPositionName(const LegendPosition position)
       return "Bottom Left";
     case LegendPosition::BottomRight:
       return "Bottom Right";
-    case LegendPosition::Hidden:
-      return "Hidden";
   }
   return "Top Left";
 }
@@ -472,9 +470,6 @@ LegendPosition legendPositionFromName(const std::string & name)
   if (name == "Bottom Right") {
     return LegendPosition::BottomRight;
   }
-  if (name == "Hidden") {
-    return LegendPosition::Hidden;
-  }
   return LegendPosition::TopLeft;
 }
 
@@ -487,7 +482,6 @@ void addLegendPositionOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(legendPositionName(LegendPosition::TopRight));
   property->addOptionStd(legendPositionName(LegendPosition::BottomLeft));
   property->addOptionStd(legendPositionName(LegendPosition::BottomRight));
-  property->addOptionStd(legendPositionName(LegendPosition::Hidden));
 }
 
 constexpr const char * kNoReferencePreset = "None";
@@ -683,11 +677,25 @@ Plot2DDisplay::Plot2DDisplay()
 
   legend_root_property_ = new rviz_common::properties::Property(
     "Legend", QVariant(), "Legend display and placement.", this);
+  show_legend_property_ = new rviz_common::properties::BoolProperty(
+    "Enabled", true, "Show the legend inside the plot area.",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  show_latest_values_property_ = new rviz_common::properties::BoolProperty(
+    "Show Values", true, "Show latest visible sample values next to legend labels.",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
   legend_position_property_ = new rviz_common::properties::EnumProperty(
     "Position", QString::fromStdString(legendPositionName(LegendPosition::TopLeft)),
     "Legend placement inside the plot area.",
     legend_root_property_, SLOT(onRenderPropertyChanged()), this);
   addLegendPositionOptions(legend_position_property_);
+  legend_x_offset_property_ = new rviz_common::properties::IntProperty(
+    "X Offset", 4, "Horizontal legend inset in pixels.",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  legend_x_offset_property_->setMin(0);
+  legend_y_offset_property_ = new rviz_common::properties::IntProperty(
+    "Y Offset", 4, "Vertical legend inset in pixels.",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  legend_y_offset_property_->setMin(0);
 
   layout_root_property_ = new rviz_common::properties::Property(
     "Layout", QVariant(), "Overlay size and screen position.", this);
@@ -1415,8 +1423,13 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.grid_color.setAlpha(80);
   settings.text_color = text_color_property_->getColor();
   settings.text_color.setAlpha(235);
+  settings.show_legend = show_legend_property_ ? show_legend_property_->getBool() : true;
+  settings.show_latest_values = show_latest_values_property_ ?
+    show_latest_values_property_->getBool() : true;
   settings.legend_position = legend_position_property_ ?
     legendPositionFromName(legend_position_property_->getStdString()) : LegendPosition::TopLeft;
+  settings.legend_x_offset = legend_x_offset_property_ ? legend_x_offset_property_->getInt() : 4;
+  settings.legend_y_offset = legend_y_offset_property_ ? legend_y_offset_property_->getInt() : 4;
   settings.show_major_grid = show_major_grid_property_ ?
     show_major_grid_property_->getBool() : true;
   settings.show_minor_grid = show_minor_grid_property_ ?

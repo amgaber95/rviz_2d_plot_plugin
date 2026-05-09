@@ -399,7 +399,11 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
 
   auto * legend = Plot2DDisplayTestAccessor::legendRoot(display);
   ASSERT_NE(nullptr, legend);
+  EXPECT_NE(nullptr, findChild(legend, "Enabled"));
+  EXPECT_NE(nullptr, findChild(legend, "Show Values"));
   EXPECT_NE(nullptr, findChild(legend, "Position"));
+  EXPECT_NE(nullptr, findChild(legend, "X Offset"));
+  EXPECT_NE(nullptr, findChild(legend, "Y Offset"));
 
   auto * layout = Plot2DDisplayTestAccessor::layoutRoot(display);
   EXPECT_NE(nullptr, findChild(layout, "Width"));
@@ -646,19 +650,24 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   EXPECT_EQ(add_preset->getValue().toString(), "None");
 }
 
-TEST(Plot2DDisplay, MapsLegendPositionPropertyToRenderSettings)
+TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
 {
   ensureQtApplication();
   Plot2DDisplay display;
   auto * legend = Plot2DDisplayTestAccessor::legendRoot(display);
   ASSERT_NE(nullptr, legend);
-  auto * position = findChild(legend, "Position");
-  ASSERT_NE(nullptr, position);
-
-  position->setValue("Bottom Right");
+  findChild(legend, "Enabled")->setValue(false);
+  findChild(legend, "Show Values")->setValue(false);
+  findChild(legend, "Position")->setValue("Bottom Right");
+  findChild(legend, "X Offset")->setValue(12);
+  findChild(legend, "Y Offset")->setValue(8);
 
   const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_FALSE(settings.show_legend);
+  EXPECT_FALSE(settings.show_latest_values);
   EXPECT_EQ(settings.legend_position, LegendPosition::BottomRight);
+  EXPECT_EQ(settings.legend_x_offset, 12);
+  EXPECT_EQ(settings.legend_y_offset, 8);
 }
 
 TEST(Plot2DDisplay, MapsGridPropertiesToRenderSettings)

@@ -294,7 +294,7 @@ TEST(Plot2DRenderer, EqualXYAxisScaleUsesMatchingPixelUnits)
   settings.fixed_y_min = 0.0;
   settings.fixed_y_max = 1.0;
   settings.xy_axis_scale_mode = rviz_2d_plot_plugin::XYAxisScaleMode::Equal;
-  settings.legend_position = LegendPosition::Hidden;
+  settings.show_legend = false;
 
   RenderableSeries series;
   series.label = "Unit Square";
@@ -327,7 +327,7 @@ TEST(Plot2DRenderer, IndependentXYAxisScaleKeepsSeparateAxisRanges)
   settings.fixed_y_min = 0.0;
   settings.fixed_y_max = 1.0;
   settings.xy_axis_scale_mode = rviz_2d_plot_plugin::XYAxisScaleMode::Independent;
-  settings.legend_position = LegendPosition::Hidden;
+  settings.show_legend = false;
 
   RenderableSeries series;
   series.label = "Unit Square";
@@ -500,5 +500,89 @@ TEST(Plot2DRenderer, PlacesLegendAtConfiguredCorner)
     0);
   EXPECT_EQ(
     countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(42, 16, 130, 28)),
+    0);
+}
+
+TEST(Plot2DRenderer, HidesLegendWhenDisabled)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries series;
+  series.label = "L";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{10.0, 0.0}};
+
+  settings.show_legend = true;
+  const QImage visible = renderer.render(settings, {series});
+  settings.show_legend = false;
+  const QImage hidden = renderer.render(settings, {series});
+
+  EXPECT_GT(countPixelsCloseTo(visible, QColor(250, 40, 40)), 0);
+  EXPECT_EQ(countPixelsCloseTo(hidden, QColor(250, 40, 40)), 0);
+}
+
+TEST(Plot2DRenderer, OmitsLatestValuesFromLegendWhenConfigured)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries series;
+  series.label = "Speed";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{10.0, 0.0}};
+
+  settings.show_latest_values = true;
+  const QImage with_values = renderer.render(settings, {series});
+  settings.show_latest_values = false;
+  const QImage without_values = renderer.render(settings, {series});
+
+  EXPECT_GT(countDifferentPixels(with_values, without_values), 0);
+}
+
+TEST(Plot2DRenderer, AppliesLegendOffsets)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.legend_position = LegendPosition::TopLeft;
+  settings.legend_x_offset = 40;
+  settings.legend_y_offset = 24;
+
+  RenderableSeries series;
+  series.label = "L";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{10.0, 0.0}};
+
+  const QImage image = renderer.render(settings, {series});
+
+  EXPECT_EQ(
+    countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(42, 16, 70, 20)),
+    0);
+  EXPECT_GT(
+    countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(78, 38, 70, 24)),
     0);
 }

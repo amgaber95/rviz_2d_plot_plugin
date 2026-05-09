@@ -205,7 +205,11 @@ private:
   rviz_common::properties::IntProperty * reference_count_property_{nullptr};
   std::vector<ReferencePropertySet> reference_properties_;
   rviz_common::properties::Property * legend_root_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_legend_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_latest_values_property_{nullptr};
   rviz_common::properties::EnumProperty * legend_position_property_{nullptr};
+  rviz_common::properties::IntProperty * legend_x_offset_property_{nullptr};
+  rviz_common::properties::IntProperty * legend_y_offset_property_{nullptr};
   rviz_common::properties::Property * layout_root_property_{nullptr};
   rviz_common::properties::IntProperty * width_property_{nullptr};
   rviz_common::properties::IntProperty * height_property_{nullptr};

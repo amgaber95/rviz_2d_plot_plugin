@@ -45,8 +45,7 @@ enum class LegendPosition
   TopLeft,
   TopRight,
   BottomLeft,
-  BottomRight,
-  Hidden
+  BottomRight
 };
 
 struct PlotRenderSettings
@@ -69,7 +68,11 @@ struct PlotRenderSettings
   QColor axis_color{230, 230, 230, 230};
   QColor grid_color{130, 130, 130, 80};
   QColor text_color{245, 245, 245, 235};
+  bool show_legend{true};
+  bool show_latest_values{true};
   LegendPosition legend_position{LegendPosition::TopLeft};
+  int legend_x_offset{4};
+  int legend_y_offset{4};
   bool show_major_grid{true};
   bool show_minor_grid{true};
   int x_major_tick_count{6};
