@@ -25,6 +25,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/float64.hpp>
 
 #include <rviz_common/config.hpp>
@@ -164,6 +165,14 @@ public:
     std::shared_ptr<rclcpp::SerializedMessage> message)
   {
     display.onSerializedMessage_("/value", std::move(message));
+  }
+
+  static void onSerializedMessage(
+    Plot2DDisplay & display,
+    const std::string & topic,
+    std::shared_ptr<rclcpp::SerializedMessage> message)
+  {
+    display.onSerializedMessage_(topic, std::move(message));
   }
 
   static const Plot2DControllerState & controllerState(Plot2DDisplay & display)
@@ -884,6 +893,44 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   ASSERT_TRUE(state.series[0].latest_value.has_value());
   EXPECT_DOUBLE_EQ(state.series[0].latest_value.value(), 12.5);
   EXPECT_EQ(state.series[0].samples.size(), 1U);
+}
+
+TEST(Plot2DDisplay, HeaderStampRenderWindowUsesNewestSampleTime)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/pose");
+  findChild(series, "Field")->setValue("pose/position/x");
+  findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Time Source")->setValue(
+    "Message Header Stamp");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/pose", {"geometry_msgs/msg/PoseStamped"}}});
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  geometry_msgs::msg::PoseStamped message;
+  message.header.stamp.sec = 42;
+  message.header.stamp.nanosec = 250000000;
+  message.pose.position.x = 3.5;
+  Plot2DDisplayTestAccessor::onSerializedMessage(
+    display, "/pose", serializeMessage(message));
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+
+  EXPECT_DOUBLE_EQ(settings.now, 42.25);
+}
+
+TEST(Plot2DDisplay, HeaderStampRenderWindowFallsBackBeforeSamplesArrive)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Time Source")->setValue(
+    "Message Header Stamp");
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+
+  EXPECT_GT(settings.now, 1000.0);
 }
 
 TEST(Plot2DDisplay, SerializedMessageCallbackDoesNotRenderOverlayTexture)

@@ -167,6 +167,7 @@ private:
   void unsubscribe_();
   bool shouldRetrySubscriptions_() const;
   double receiveNowSeconds_() const;
+  double plotNowSeconds_(TimeSource source) const;
   void prepareOverlayRendering_();
   TopicTypeMap topicNamesAndTypes_() const;
   std::vector<std::string> topicOptions_() const;

@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -1395,7 +1396,7 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.width = config.layout.width;
   settings.height = config.layout.height;
   settings.window_seconds = config.time.window_seconds;
-  settings.now = receiveNowSeconds_();
+  settings.now = plotNowSeconds_(config.time.source);
   settings.x_axis_mode = config.x_axis.mode;
   settings.x_scale_mode = config.x_axis.scale_mode;
   settings.xy_axis_scale_mode = config.x_axis.axis_scale_mode;
@@ -1546,6 +1547,32 @@ double Plot2DDisplay::receiveNowSeconds_() const
     return node_->get_clock()->now().seconds();
   }
   return rclcpp::Clock().now().seconds();
+}
+
+double Plot2DDisplay::plotNowSeconds_(const TimeSource source) const
+{
+  if (source != TimeSource::HeaderStamp) {
+    return receiveNowSeconds_();
+  }
+
+  double newest_sample_time = -std::numeric_limits<double>::infinity();
+  bool has_sample = false;
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    for (const PlotSeriesControllerState & series : controller_.state().series) {
+      const std::optional<PlotSample> latest = series.samples.latest();
+      if (!latest.has_value()) {
+        continue;
+      }
+      newest_sample_time = std::max(newest_sample_time, latest->time);
+      has_sample = true;
+    }
+  }
+
+  if (has_sample) {
+    return newest_sample_time;
+  }
+  return receiveNowSeconds_();
 }
 
 void Plot2DDisplay::prepareOverlayRendering_()
