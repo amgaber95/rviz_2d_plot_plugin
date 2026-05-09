@@ -11,6 +11,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <limits>
 #include <vector>
 
 #include "rviz_2d_plot_plugin/plot_2d_renderer.hpp"
@@ -104,6 +106,36 @@ int countPixelsCloseToInRect(const QImage & image, const QColor & target, const 
     }
   }
   return count;
+}
+
+QRect coloredPixelBounds(const QImage & image, const QColor & target)
+{
+  QRect bounds;
+  int left = std::numeric_limits<int>::max();
+  int right = std::numeric_limits<int>::min();
+  int top = std::numeric_limits<int>::max();
+  int bottom = std::numeric_limits<int>::min();
+
+  for (int y = 0; y < image.height(); ++y) {
+    for (int x = 0; x < image.width(); ++x) {
+      const QColor pixel = image.pixelColor(x, y);
+      if (std::abs(pixel.red() - target.red()) >= 40 ||
+        std::abs(pixel.green() - target.green()) >= 40 ||
+        std::abs(pixel.blue() - target.blue()) >= 40)
+      {
+        continue;
+      }
+      left = std::min(left, x);
+      right = std::max(right, x);
+      top = std::min(top, y);
+      bottom = std::max(bottom, y);
+    }
+  }
+
+  if (left <= right && top <= bottom) {
+    bounds = QRect(QPoint(left, top), QPoint(right, bottom));
+  }
+  return bounds;
 }
 
 RenderableSeries horizontalSeries()
@@ -245,6 +277,72 @@ TEST(Plot2DRenderer, UsesSampleXValuesInFieldXAxisMode)
   EXPECT_GT(
     countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(90, 70, 160, 30)),
     0);
+}
+
+TEST(Plot2DRenderer, EqualXYAxisScaleUsesMatchingPixelUnits)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 360;
+  settings.height = 220;
+  settings.x_axis_mode = XAxisMode::Field;
+  settings.x_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_x_min = 0.0;
+  settings.fixed_x_max = 1.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = 0.0;
+  settings.fixed_y_max = 1.0;
+  settings.xy_axis_scale_mode = rviz_2d_plot_plugin::XYAxisScaleMode::Equal;
+  settings.legend_position = LegendPosition::Hidden;
+
+  RenderableSeries series;
+  series.label = "Unit Square";
+  series.color = QColor(250, 40, 40);
+  series.line_width = 3.0;
+  series.plot_style = PlotStyle::Step;
+  series.samples = std::vector<PlotSample>{
+    PlotSample{0.0, 0.0, 0.0},
+    PlotSample{0.0, 1.0, 1.0}};
+
+  const QImage image = renderer.render(settings, {series});
+  const QRect bounds = coloredPixelBounds(image, series.color);
+
+  ASSERT_FALSE(bounds.isNull());
+  EXPECT_NEAR(bounds.width(), bounds.height(), 4);
+}
+
+TEST(Plot2DRenderer, IndependentXYAxisScaleKeepsSeparateAxisRanges)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 360;
+  settings.height = 220;
+  settings.x_axis_mode = XAxisMode::Field;
+  settings.x_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_x_min = 0.0;
+  settings.fixed_x_max = 1.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = 0.0;
+  settings.fixed_y_max = 1.0;
+  settings.xy_axis_scale_mode = rviz_2d_plot_plugin::XYAxisScaleMode::Independent;
+  settings.legend_position = LegendPosition::Hidden;
+
+  RenderableSeries series;
+  series.label = "Unit Square";
+  series.color = QColor(250, 40, 40);
+  series.line_width = 3.0;
+  series.plot_style = PlotStyle::Step;
+  series.samples = std::vector<PlotSample>{
+    PlotSample{0.0, 0.0, 0.0},
+    PlotSample{0.0, 1.0, 1.0}};
+
+  const QImage image = renderer.render(settings, {series});
+  const QRect bounds = coloredPixelBounds(image, series.color);
+
+  ASSERT_FALSE(bounds.isNull());
+  EXPECT_GT(bounds.width(), bounds.height() + 80);
 }
 
 TEST(Plot2DRenderer, AppliesConfiguredLineWidth)
