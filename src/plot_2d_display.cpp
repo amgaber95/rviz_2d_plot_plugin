@@ -1374,7 +1374,9 @@ void Plot2DDisplay::onSerializedMessage_(
     controller_.appendSerializedMessage(topic, *message, receiveNowSeconds_());
   }
   updateStatusFromController_();
-  renderOverlay_();
+  if (context_) {
+    context_->queueRender();
+  }
 }
 
 void Plot2DDisplay::updateStatusFromController_()

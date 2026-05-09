@@ -14,10 +14,13 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <rclcpp/rclcpp.hpp>
@@ -263,6 +266,45 @@ std::vector<QString> completionsFor(QCompleter * completer, const QString & pref
     completions.push_back(completer->currentCompletion());
   }
   return completions;
+}
+
+std::string plotDisplaySource()
+{
+  const std::filesystem::path test_file{__FILE__};
+  const std::filesystem::path source_file =
+    test_file.parent_path().parent_path() / "src" / "plot_2d_display.cpp";
+  std::ifstream input(source_file);
+  return std::string(
+    std::istreambuf_iterator<char>(input),
+    std::istreambuf_iterator<char>());
+}
+
+std::string functionBody(
+  const std::string & source,
+  const std::string & signature)
+{
+  const std::size_t signature_start = source.find(signature);
+  if (signature_start == std::string::npos) {
+    return {};
+  }
+
+  const std::size_t body_start = source.find('{', signature_start);
+  if (body_start == std::string::npos) {
+    return {};
+  }
+
+  int depth = 0;
+  for (std::size_t i = body_start; i < source.size(); ++i) {
+    if (source[i] == '{') {
+      ++depth;
+    } else if (source[i] == '}') {
+      --depth;
+      if (depth == 0) {
+        return source.substr(body_start, i - body_start + 1);
+      }
+    }
+  }
+  return {};
 }
 
 template<typename MessageT>
@@ -842,6 +884,17 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   ASSERT_TRUE(state.series[0].latest_value.has_value());
   EXPECT_DOUBLE_EQ(state.series[0].latest_value.value(), 12.5);
   EXPECT_EQ(state.series[0].samples.size(), 1U);
+}
+
+TEST(Plot2DDisplay, SerializedMessageCallbackDoesNotRenderOverlayTexture)
+{
+  const std::string body = functionBody(
+    plotDisplaySource(),
+    "void Plot2DDisplay::onSerializedMessage_(");
+
+  ASSERT_FALSE(body.empty());
+  EXPECT_EQ(body.find("renderOverlay_();"), std::string::npos);
+  EXPECT_NE(body.find("queueRender();"), std::string::npos);
 }
 
 TEST(Plot2DDisplay, DoesNotRecreateHealthySubscriptionsDuringRetryUpdate)
