@@ -102,6 +102,26 @@ PlotRange xRangeForSettings(
   return makeAutoRange(x_samples, settings.x_padding_fraction);
 }
 
+void applyEqualXYScale(
+  const QRectF & rect,
+  PlotRange & x_range,
+  PlotRange & y_range)
+{
+  if (!x_range.isValid() || !y_range.isValid() || rect.width() <= 0.0 || rect.height() <= 0.0) {
+    return;
+  }
+
+  const double units_per_pixel = std::max(
+    x_range.span() / rect.width(),
+    y_range.span() / rect.height());
+  const double x_center = (x_range.min + x_range.max) * 0.5;
+  const double y_center = (y_range.min + y_range.max) * 0.5;
+  const double x_span = units_per_pixel * rect.width();
+  const double y_span = units_per_pixel * rect.height();
+  x_range = PlotRange{x_center - x_span * 0.5, x_center + x_span * 0.5};
+  y_range = PlotRange{y_center - y_span * 0.5, y_center + y_span * 0.5};
+}
+
 std::string formatValue(const double value)
 {
   std::ostringstream stream;
@@ -382,8 +402,13 @@ QImage Plot2DRenderer::render(
     settings.now};
   const std::vector<PlotSample> samples = visibleSamples(
     series, time_range, settings.x_axis_mode);
-  const PlotRange x_range = xRangeForSettings(settings, samples);
-  const PlotRange y_range = yRangeForSettings(settings, samples);
+  PlotRange x_range = xRangeForSettings(settings, samples);
+  PlotRange y_range = yRangeForSettings(settings, samples);
+  if (settings.x_axis_mode == XAxisMode::Field &&
+    settings.xy_axis_scale_mode == XYAxisScaleMode::Equal)
+  {
+    applyEqualXYScale(rect, x_range, y_range);
+  }
 
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);

@@ -57,6 +57,7 @@ struct PlotRenderSettings
   double window_seconds{30.0};
   XAxisMode x_axis_mode{XAxisMode::Time};
   AxisScaleMode x_scale_mode{AxisScaleMode::Auto};
+  XYAxisScaleMode xy_axis_scale_mode{XYAxisScaleMode::Independent};
   double fixed_x_min{-1.0};
   double fixed_x_max{1.0};
   double x_padding_fraction{0.08};

@@ -18,9 +18,10 @@
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::Plot2DController;
 using rviz_2d_plot_plugin::PlotControllerStatus;
+using rviz_2d_plot_plugin::PlotMode;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
-using rviz_2d_plot_plugin::XAxisMode;
+using rviz_2d_plot_plugin::XYHistoryMode;
 
 namespace
 {
@@ -152,15 +153,15 @@ TEST(Plot2DController, UsesMessageHeaderStampWhenConfigured)
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 3.5);
 }
 
-TEST(Plot2DController, ExtractsSameTopicXAndYFieldsInFieldXAxisMode)
+TEST(Plot2DController, ExtractsSameTopicXAndYFieldsInXYMode)
 {
   Plot2DController controller;
   TopicTypeMap topics{{"/pose", {"geometry_msgs/msg/PoseStamped"}}};
   Plot2DConfig config;
-  config.x_axis.mode = XAxisMode::Field;
+  config.plot_mode = PlotMode::XY;
   config.series[0].topic = "/pose";
   config.series[0].x_field = "pose/position/x";
-  config.series[0].field = "pose/position/y";
+  config.series[0].y_field = "pose/position/y";
   config.time.window_seconds = 10.0;
   controller.configure(config, topics);
 
@@ -177,6 +178,41 @@ TEST(Plot2DController, ExtractsSameTopicXAndYFieldsInFieldXAxisMode)
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().time, 20.0);
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().x, 2.5);
   EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, -1.25);
+}
+
+TEST(Plot2DController, KeepsAllSamplesForXYAllSamplesHistoryMode)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/pose", {"geometry_msgs/msg/PoseStamped"}}};
+  Plot2DConfig config;
+  config.plot_mode = PlotMode::XY;
+  config.time.xy_history_mode = XYHistoryMode::AllSamples;
+  config.time.window_seconds = 1.0;
+  config.series[0].topic = "/pose";
+  config.series[0].x_field = "pose/position/x";
+  config.series[0].y_field = "pose/position/y";
+  controller.configure(config, topics);
+
+  geometry_msgs::msg::PoseStamped message;
+  rclcpp::Serialization<geometry_msgs::msg::PoseStamped> serializer;
+  rclcpp::SerializedMessage serialized;
+
+  message.pose.position.x = 1.0;
+  message.pose.position.y = 2.0;
+  serializer.serialize_message(&message, &serialized);
+  EXPECT_TRUE(controller.appendSerializedMessage("/pose", serialized, 10.0));
+
+  serialized = rclcpp::SerializedMessage{};
+  message.pose.position.x = 3.0;
+  message.pose.position.y = 4.0;
+  serializer.serialize_message(&message, &serialized);
+  EXPECT_TRUE(controller.appendSerializedMessage("/pose", serialized, 20.0));
+
+  ASSERT_EQ(controller.state().series[0].samples.size(), 2U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().x, 1.0);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 2.0);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().back().x, 3.0);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().back().value, 4.0);
 }
 
 TEST(Plot2DController, FallsBackToReceiveTimeWhenHeaderStampIsUnavailable)

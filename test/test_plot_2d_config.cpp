@@ -14,11 +14,14 @@ using rviz_2d_plot_plugin::AxisConfig;
 using rviz_2d_plot_plugin::AxisScaleMode;
 using rviz_2d_plot_plugin::HorizontalAlignment;
 using rviz_2d_plot_plugin::LineStyle;
+using rviz_2d_plot_plugin::PlotMode;
 using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
+using rviz_2d_plot_plugin::XYAxisScaleMode;
+using rviz_2d_plot_plugin::XYHistoryMode;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
 {
@@ -28,6 +31,7 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_TRUE(config.series.front().enabled);
   EXPECT_EQ(config.series.front().topic, "");
   EXPECT_EQ(config.series.front().x_field, "");
+  EXPECT_EQ(config.series.front().y_field, "");
   EXPECT_EQ(config.series.front().field, "");
   EXPECT_EQ(config.series.front().label, "Series");
   EXPECT_EQ(config.series.front().color.red, 80);
@@ -47,13 +51,16 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
 
   EXPECT_EQ(config.x_axis.mode, XAxisMode::Time);
   EXPECT_EQ(config.x_axis.scale_mode, AxisScaleMode::Auto);
+  EXPECT_EQ(config.x_axis.axis_scale_mode, XYAxisScaleMode::Independent);
   EXPECT_DOUBLE_EQ(config.x_axis.fixed_min, -1.0);
   EXPECT_DOUBLE_EQ(config.x_axis.fixed_max, 1.0);
 
+  EXPECT_EQ(config.plot_mode, PlotMode::TimeSeries);
   EXPECT_DOUBLE_EQ(config.time.window_seconds, 30.0);
   EXPECT_DOUBLE_EQ(config.time.refresh_rate_hz, 20.0);
   EXPECT_FALSE(config.time.paused);
   EXPECT_EQ(config.time.source, TimeSource::ReceiveTime);
+  EXPECT_EQ(config.time.xy_history_mode, XYHistoryMode::RollingTimeWindow);
 
   EXPECT_EQ(config.layout.width, 360);
   EXPECT_EQ(config.layout.height, 220);

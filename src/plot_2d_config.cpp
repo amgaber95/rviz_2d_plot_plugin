@@ -108,6 +108,8 @@ void Plot2DConfig::repair()
     series.emplace_back();
   }
 
+  x_axis.mode = plot_mode == PlotMode::XY ? XAxisMode::Field : XAxisMode::Time;
+
   for (SeriesConfig & item : series) {
     item.repair();
   }

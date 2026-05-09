@@ -75,6 +75,7 @@ protected:
 private Q_SLOTS:
   void onConfigPropertyChanged();
   void onRenderPropertyChanged();
+  void onPlotModeChanged();
   void onSeriesCountChanged();
   void onSeriesActionChanged();
   void onReferencePresetChanged();
@@ -115,6 +116,7 @@ private:
     rviz_common::properties::BoolProperty * enabled{nullptr};
     rviz_common::properties::EditableEnumProperty * topic{nullptr};
     rviz_common::properties::EditableEnumProperty * x_field{nullptr};
+    rviz_common::properties::EditableEnumProperty * y_field{nullptr};
     rviz_common::properties::EditableEnumProperty * field{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
     rviz_common::properties::ColorProperty * color{nullptr};
@@ -149,6 +151,7 @@ private:
     int count,
     const std::vector<ReferenceConfig> & values);
   void appendReferencePreset_();
+  void updateModePropertyVisibility_();
   const SeriesPropertySet * seriesPropertiesForField_(
     rviz_common::properties::EditableEnumProperty * property) const;
   void resolveAndSubscribe_();
@@ -171,6 +174,7 @@ private:
 
   rviz_common::properties::BoolProperty * pause_plot_property_{nullptr};
   rviz_common::properties::BoolProperty * clear_history_property_{nullptr};
+  rviz_common::properties::EnumProperty * plot_mode_property_{nullptr};
   rviz_common::properties::Property * series_root_property_{nullptr};
   rviz_common::properties::IntProperty * series_count_property_{nullptr};
   std::vector<SeriesPropertySet> series_properties_;
@@ -179,10 +183,11 @@ private:
   rviz_common::properties::FloatProperty * window_seconds_property_{nullptr};
   rviz_common::properties::FloatProperty * refresh_rate_property_{nullptr};
   rviz_common::properties::Property * x_axis_root_property_{nullptr};
-  rviz_common::properties::EnumProperty * x_axis_mode_property_{nullptr};
+  rviz_common::properties::EnumProperty * xy_history_mode_property_{nullptr};
   rviz_common::properties::BoolProperty * x_auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * x_min_property_{nullptr};
   rviz_common::properties::FloatProperty * x_max_property_{nullptr};
+  rviz_common::properties::EnumProperty * x_axis_scale_property_{nullptr};
   rviz_common::properties::Property * y_axis_root_property_{nullptr};
   rviz_common::properties::BoolProperty * auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};

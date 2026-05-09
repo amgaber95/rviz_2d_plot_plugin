@@ -14,6 +14,7 @@
 #include <QPainter>
 #include <QSignalBlocker>
 #include <QStyleOptionViewItem>
+#include <QTimer>
 #include <QVariant>
 
 #include <algorithm>
@@ -248,32 +249,88 @@ void addTimeSourceOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(timeSourceName(TimeSource::HeaderStamp));
 }
 
-std::string xAxisModeName(const XAxisMode mode)
+std::string plotModeName(const PlotMode mode)
 {
   switch (mode) {
-    case XAxisMode::Time:
-      return "Time";
-    case XAxisMode::Field:
-      return "Field";
+    case PlotMode::TimeSeries:
+      return "Time Series";
+    case PlotMode::XY:
+      return "XY";
   }
-  return "Time";
+  return "Time Series";
 }
 
-XAxisMode xAxisModeFromName(const std::string & name)
+PlotMode plotModeFromName(const std::string & name)
 {
-  if (name == "Field") {
-    return XAxisMode::Field;
+  if (name == "XY") {
+    return PlotMode::XY;
   }
-  return XAxisMode::Time;
+  return PlotMode::TimeSeries;
 }
 
-void addXAxisModeOptions(rviz_common::properties::EnumProperty * property)
+void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
 {
   if (!property) {
     return;
   }
-  property->addOptionStd(xAxisModeName(XAxisMode::Time));
-  property->addOptionStd(xAxisModeName(XAxisMode::Field));
+  property->addOptionStd(plotModeName(PlotMode::TimeSeries));
+  property->addOptionStd(plotModeName(PlotMode::XY));
+}
+
+std::string xyHistoryModeName(const XYHistoryMode mode)
+{
+  switch (mode) {
+    case XYHistoryMode::RollingTimeWindow:
+      return "Rolling Time Window";
+    case XYHistoryMode::AllSamples:
+      return "All Samples";
+  }
+  return "Rolling Time Window";
+}
+
+XYHistoryMode xyHistoryModeFromName(const std::string & name)
+{
+  if (name == "All Samples") {
+    return XYHistoryMode::AllSamples;
+  }
+  return XYHistoryMode::RollingTimeWindow;
+}
+
+void addXYHistoryModeOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(xyHistoryModeName(XYHistoryMode::RollingTimeWindow));
+  property->addOptionStd(xyHistoryModeName(XYHistoryMode::AllSamples));
+}
+
+std::string xyAxisScaleModeName(const XYAxisScaleMode mode)
+{
+  switch (mode) {
+    case XYAxisScaleMode::Independent:
+      return "Independent";
+    case XYAxisScaleMode::Equal:
+      return "1:1";
+  }
+  return "Independent";
+}
+
+XYAxisScaleMode xyAxisScaleModeFromName(const std::string & name)
+{
+  if (name == "1:1") {
+    return XYAxisScaleMode::Equal;
+  }
+  return XYAxisScaleMode::Independent;
+}
+
+void addXYAxisScaleModeOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(xyAxisScaleModeName(XYAxisScaleMode::Independent));
+  property->addOptionStd(xyAxisScaleModeName(XYAxisScaleMode::Equal));
 }
 
 std::string horizontalAlignmentName(const HorizontalAlignment alignment)
@@ -525,6 +582,12 @@ Plot2DDisplay::Plot2DDisplay()
     "Clear History", false, "Clear stored samples for this plot.",
     this, SLOT(onClearHistoryChanged()), this);
 
+  plot_mode_property_ = new rviz_common::properties::EnumProperty(
+    "Plot Mode", QString::fromStdString(plotModeName(PlotMode::TimeSeries)),
+    "Choose time-series or same-topic XY plotting.",
+    this, SLOT(onPlotModeChanged()), this);
+  addPlotModeOptions(plot_mode_property_);
+
   series_root_property_ = new rviz_common::properties::Property(
     "Series", QVariant(), "Topic field series to draw.", this);
   series_count_property_ = new rviz_common::properties::IntProperty(
@@ -543,27 +606,34 @@ Plot2DDisplay::Plot2DDisplay()
     "Window Seconds", 30.0F, "Visible rolling time window in seconds.",
     time_root_property_, SLOT(onConfigPropertyChanged()), this);
   window_seconds_property_->setMin(1.0F);
+  xy_history_mode_property_ = new rviz_common::properties::EnumProperty(
+    "XY History Mode",
+    QString::fromStdString(xyHistoryModeName(XYHistoryMode::RollingTimeWindow)),
+    "How XY samples are retained.",
+    time_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addXYHistoryModeOptions(xy_history_mode_property_);
   refresh_rate_property_ = new rviz_common::properties::FloatProperty(
     "Refresh Rate", 20.0F, "Overlay redraw rate in Hz.", time_root_property_,
     SLOT(onConfigPropertyChanged()), this);
   refresh_rate_property_->setMin(1.0F);
 
   x_axis_root_property_ = new rviz_common::properties::Property(
-    "X Axis", QVariant(), "Horizontal axis source and scaling.", this);
-  x_axis_mode_property_ = new rviz_common::properties::EnumProperty(
-    "Mode", QString::fromStdString(xAxisModeName(XAxisMode::Time)),
-    "Use time or a numeric message field for the x-axis.",
-    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
-  addXAxisModeOptions(x_axis_mode_property_);
+    "X Axis", QVariant(), "X-axis scale settings for XY mode.", this);
   x_auto_scale_property_ = new rviz_common::properties::BoolProperty(
-    "Auto Scale", true, "Automatically fit field-mode x-axis values.",
+    "Auto Scale", true, "Automatically fit XY x-axis values.",
     x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
   x_min_property_ = new rviz_common::properties::FloatProperty(
-    "X Min", -1.0F, "Fixed x-axis minimum when field mode auto scale is disabled.",
+    "X Min", -1.0F, "Fixed x-axis minimum when auto scale is disabled.",
     x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
   x_max_property_ = new rviz_common::properties::FloatProperty(
-    "X Max", 1.0F, "Fixed x-axis maximum when field mode auto scale is disabled.",
+    "X Max", 1.0F, "Fixed x-axis maximum when auto scale is disabled.",
     x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+  x_axis_scale_property_ = new rviz_common::properties::EnumProperty(
+    "Axis Scale",
+    QString::fromStdString(xyAxisScaleModeName(XYAxisScaleMode::Independent)),
+    "XY axis scale relationship.", x_axis_root_property_,
+    SLOT(onConfigPropertyChanged()), this);
+  addXYAxisScaleModeOptions(x_axis_scale_property_);
 
   y_axis_root_property_ = new rviz_common::properties::Property(
     "Y Axis", QVariant(), "Vertical value axis scaling.", this);
@@ -659,6 +729,7 @@ Plot2DDisplay::Plot2DDisplay()
   text_color_property_ = new rviz_common::properties::ColorProperty(
     "Text Color", QColor(245, 245, 245), "Axis and legend text color.",
     style_root_property_, SLOT(onConfigPropertyChanged()), this);
+  updateModePropertyVisibility_();
 }
 
 Plot2DDisplay::~Plot2DDisplay() = default;
@@ -677,6 +748,7 @@ void Plot2DDisplay::load(const rviz_common::Config & config)
   }
 
   rviz_common::Display::load(config);
+  updateModePropertyVisibility_();
 }
 
 void Plot2DDisplay::onInitialize()
@@ -776,6 +848,12 @@ void Plot2DDisplay::onRenderPropertyChanged()
   renderOverlay_();
 }
 
+void Plot2DDisplay::onPlotModeChanged()
+{
+  updateModePropertyVisibility_();
+  onConfigPropertyChanged();
+}
+
 void Plot2DDisplay::onSeriesCountChanged()
 {
   const std::vector<SeriesConfig> current = seriesConfigFromProperties_();
@@ -832,8 +910,13 @@ void Plot2DDisplay::onSeriesActionChanged()
     return;
   }
 
-  replaceSeriesProperties_(series);
-  onConfigPropertyChanged();
+  QTimer::singleShot(
+    0,
+    this,
+    [this, series = std::move(series)]() mutable {
+      replaceSeriesProperties_(series);
+      onConfigPropertyChanged();
+    });
 }
 
 void Plot2DDisplay::onReferencePresetChanged()
@@ -914,6 +997,7 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.enabled = properties.enabled && properties.enabled->getBool();
     config.topic = properties.topic ? properties.topic->getStdString() : "";
     config.x_field = properties.x_field ? properties.x_field->getStdString() : "";
+    config.y_field = properties.y_field ? properties.y_field->getStdString() : "";
     config.field = properties.field ? properties.field->getStdString() : "";
     config.label = properties.label ? properties.label->getStdString() : "Series";
     config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
@@ -956,17 +1040,24 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   Plot2DConfig config;
   config.series = seriesConfigFromProperties_();
   config.references = referenceConfigFromProperties_();
+  config.plot_mode = plot_mode_property_ ?
+    plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
 
   config.time.window_seconds = window_seconds_property_->getFloat();
   config.time.refresh_rate_hz = refresh_rate_property_->getFloat();
   config.time.paused = pause_plot_property_->getBool();
   config.time.source = time_source_property_ ?
     timeSourceFromName(time_source_property_->getStdString()) : TimeSource::ReceiveTime;
+  config.time.xy_history_mode = xy_history_mode_property_ ?
+    xyHistoryModeFromName(xy_history_mode_property_->getStdString()) :
+    XYHistoryMode::RollingTimeWindow;
 
-  config.x_axis.mode = x_axis_mode_property_ ?
-    xAxisModeFromName(x_axis_mode_property_->getStdString()) : XAxisMode::Time;
+  config.x_axis.mode = config.plot_mode == PlotMode::XY ? XAxisMode::Field : XAxisMode::Time;
   config.x_axis.scale_mode = x_auto_scale_property_->getBool() ?
     AxisScaleMode::Auto : AxisScaleMode::Fixed;
+  config.x_axis.axis_scale_mode = x_axis_scale_property_ ?
+    xyAxisScaleModeFromName(x_axis_scale_property_->getStdString()) :
+    XYAxisScaleMode::Independent;
   config.x_axis.fixed_min = x_min_property_->getFloat();
   config.x_axis.fixed_max = x_max_property_->getFloat();
 
@@ -1041,10 +1132,19 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       &Plot2DDisplay::onFieldOptionsRequested);
     properties.x_field = new ContainsFilterEditableEnumProperty(
       "X Field", QString::fromStdString(value.x_field),
-      "Numeric field used for the x-axis when X Axis Mode is Field.",
+      "Numeric field used for the x-axis in XY mode.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
     QObject::connect(
       properties.x_field,
+      &rviz_common::properties::EditableEnumProperty::requestOptions,
+      this,
+      &Plot2DDisplay::onFieldOptionsRequested);
+    properties.y_field = new ContainsFilterEditableEnumProperty(
+      "Y Field", QString::fromStdString(value.y_field),
+      "Numeric or boolean field used for the y-axis in XY mode.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    QObject::connect(
+      properties.y_field,
       &rviz_common::properties::EditableEnumProperty::requestOptions,
       this,
       &Plot2DDisplay::onFieldOptionsRequested);
@@ -1079,6 +1179,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       properties.root, SLOT(onConfigPropertyChanged()), this);
     series_properties_.push_back(properties);
   }
+  updateModePropertyVisibility_();
 }
 
 void Plot2DDisplay::replaceSeriesProperties_(const std::vector<SeriesConfig> & values)
@@ -1169,11 +1270,36 @@ void Plot2DDisplay::appendReferencePreset_()
   onConfigPropertyChanged();
 }
 
+void Plot2DDisplay::updateModePropertyVisibility_()
+{
+  const bool xy_mode = plot_mode_property_ &&
+    plotModeFromName(plot_mode_property_->getStdString()) == PlotMode::XY;
+
+  if (xy_history_mode_property_) {
+    xy_history_mode_property_->setHidden(!xy_mode);
+  }
+  if (x_axis_root_property_) {
+    x_axis_root_property_->setHidden(!xy_mode);
+  }
+
+  for (SeriesPropertySet & series : series_properties_) {
+    if (series.field) {
+      series.field->setHidden(xy_mode);
+    }
+    if (series.x_field) {
+      series.x_field->setHidden(!xy_mode);
+    }
+    if (series.y_field) {
+      series.y_field->setHidden(!xy_mode);
+    }
+  }
+}
+
 const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField_(
   rviz_common::properties::EditableEnumProperty * property) const
 {
   for (const SeriesPropertySet & series : series_properties_) {
-    if (series.field == property || series.x_field == property) {
+    if (series.field == property || series.x_field == property || series.y_field == property) {
       return &series;
     }
   }
@@ -1270,6 +1396,7 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.now = receiveNowSeconds_();
   settings.x_axis_mode = config.x_axis.mode;
   settings.x_scale_mode = config.x_axis.scale_mode;
+  settings.xy_axis_scale_mode = config.x_axis.axis_scale_mode;
   settings.fixed_x_min = config.x_axis.fixed_min;
   settings.fixed_x_max = config.x_axis.fixed_max;
   settings.x_padding_fraction = config.x_axis.padding_fraction;

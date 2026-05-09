@@ -191,12 +191,15 @@ using rviz_2d_plot_plugin::HorizontalAlignment;
 using rviz_2d_plot_plugin::LegendPosition;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::PlotControllerStatus;
+using rviz_2d_plot_plugin::PlotMode;
 using rviz_2d_plot_plugin::Plot2DDisplay;
 using rviz_2d_plot_plugin::Plot2DDisplayTestAccessor;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
 using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
+using rviz_2d_plot_plugin::XYAxisScaleMode;
+using rviz_2d_plot_plugin::XYHistoryMode;
 
 void ensureQtApplication()
 {
@@ -209,6 +212,11 @@ void ensureQtApplication()
   static char app_name[] = "test_plot_2d_display";
   static char * argv[] = {app_name, nullptr};
   static QApplication application(argc, argv);
+}
+
+void processQtEvents()
+{
+  QApplication::processEvents();
 }
 
 rviz_common::properties::Property * findChild(
@@ -282,6 +290,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::layoutRoot(display));
   EXPECT_EQ(findChild(&display, "Pause Plot"), Plot2DDisplayTestAccessor::pausePlot(display));
   EXPECT_EQ(findChild(&display, "Clear History"), Plot2DDisplayTestAccessor::clearHistory(display));
+  EXPECT_NE(nullptr, findChild(&display, "Plot Mode"));
 
   auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
   ASSERT_NE(nullptr, series);
@@ -290,7 +299,11 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(series, "Action"));
   EXPECT_NE(nullptr, findChild(series, "Topic"));
   EXPECT_NE(nullptr, findChild(series, "X Field"));
+  EXPECT_NE(nullptr, findChild(series, "Y Field"));
   EXPECT_NE(nullptr, findChild(series, "Field"));
+  EXPECT_FALSE(findChild(series, "Field")->getHidden());
+  EXPECT_TRUE(findChild(series, "X Field")->getHidden());
+  EXPECT_TRUE(findChild(series, "Y Field")->getHidden());
   EXPECT_NE(nullptr, findChild(series, "Label"));
   EXPECT_NE(nullptr, findChild(series, "Color"));
   EXPECT_NE(nullptr, findChild(series, "Line Width"));
@@ -303,13 +316,17 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   auto * time = Plot2DDisplayTestAccessor::timeRoot(display);
   EXPECT_NE(nullptr, findChild(time, "Time Source"));
   EXPECT_NE(nullptr, findChild(time, "Window Seconds"));
+  EXPECT_NE(nullptr, findChild(time, "XY History Mode"));
+  EXPECT_TRUE(findChild(time, "XY History Mode")->getHidden());
   EXPECT_NE(nullptr, findChild(time, "Refresh Rate"));
 
   auto * x_axis = Plot2DDisplayTestAccessor::xAxisRoot(display);
-  EXPECT_NE(nullptr, findChild(x_axis, "Mode"));
+  EXPECT_TRUE(x_axis->getHidden());
+  EXPECT_EQ(nullptr, findChild(x_axis, "Mode"));
   EXPECT_NE(nullptr, findChild(x_axis, "Auto Scale"));
   EXPECT_NE(nullptr, findChild(x_axis, "X Min"));
   EXPECT_NE(nullptr, findChild(x_axis, "X Max"));
+  EXPECT_NE(nullptr, findChild(x_axis, "Axis Scale"));
 
   auto * y_axis = Plot2DDisplayTestAccessor::yAxisRoot(display);
   EXPECT_NE(nullptr, findChild(y_axis, "Auto Scale"));
@@ -347,6 +364,38 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(style, "Axis Color"));
   EXPECT_NE(nullptr, findChild(style, "Grid Color"));
   EXPECT_NE(nullptr, findChild(style, "Text Color"));
+}
+
+TEST(Plot2DDisplay, PlotModeSwitchesBetweenTimeAndXYSeriesFields)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+
+  auto * field = findChild(series, "Field");
+  auto * x_field = findChild(series, "X Field");
+  auto * y_field = findChild(series, "Y Field");
+  ASSERT_NE(nullptr, field);
+  ASSERT_NE(nullptr, x_field);
+  ASSERT_NE(nullptr, y_field);
+  auto * xy_history_mode =
+    findChild(Plot2DDisplayTestAccessor::timeRoot(display), "XY History Mode");
+  ASSERT_NE(nullptr, xy_history_mode);
+
+  EXPECT_FALSE(field->getHidden());
+  EXPECT_TRUE(x_field->getHidden());
+  EXPECT_TRUE(y_field->getHidden());
+  EXPECT_TRUE(Plot2DDisplayTestAccessor::xAxisRoot(display)->getHidden());
+  EXPECT_TRUE(xy_history_mode->getHidden());
+
+  findChild(&display, "Plot Mode")->setValue("XY");
+
+  EXPECT_TRUE(field->getHidden());
+  EXPECT_FALSE(x_field->getHidden());
+  EXPECT_FALSE(y_field->getHidden());
+  EXPECT_FALSE(Plot2DDisplayTestAccessor::xAxisRoot(display)->getHidden());
+  EXPECT_FALSE(xy_history_mode->getHidden());
 }
 
 TEST(Plot2DDisplay, PreparesRvizOverlayRenderingBackend)
@@ -417,10 +466,12 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   ASSERT_NE(nullptr, series);
 
   findChild(series, "Enabled")->setValue(false);
-  findChild(series, "Topic")->setValue("/cmd_vel_out");
-  findChild(series, "X Field")->setValue("linear/y");
-  findChild(series, "Field")->setValue("linear/x");
-  findChild(series, "Label")->setValue("Linear X");
+  findChild(series, "Topic")->setValue("/odom");
+  findChild(&display, "Plot Mode")->setValue("XY");
+  findChild(series, "X Field")->setValue("pose/pose/position/x");
+  findChild(series, "Y Field")->setValue("pose/pose/position/y");
+  findChild(series, "Field")->setValue("pose/pose/position/y");
+  findChild(series, "Label")->setValue("Odom Position");
   findChild(series, "Color")->setValue(QColor(255, 80, 20));
   findChild(series, "Line Width")->setValue(3.5);
   findChild(series, "Line Alpha")->setValue(0.45);
@@ -433,10 +484,12 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   auto * time_source = findChild(Plot2DDisplayTestAccessor::timeRoot(display), "Time Source");
   ASSERT_NE(nullptr, time_source);
   time_source->setValue("Message Header Stamp");
-  findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Mode")->setValue("Field");
+  findChild(Plot2DDisplayTestAccessor::timeRoot(display), "XY History Mode")->setValue(
+    "All Samples");
   findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale")->setValue(false);
   findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "X Min")->setValue(-4.0);
   findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "X Max")->setValue(4.0);
+  findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Axis Scale")->setValue("1:1");
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale")->setValue(false);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Min")->setValue(-2.0);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Max")->setValue(2.0);
@@ -464,10 +517,11 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
 
   ASSERT_EQ(config.series.size(), 1U);
   EXPECT_FALSE(config.series[0].enabled);
-  EXPECT_EQ(config.series[0].topic, "/cmd_vel_out");
-  EXPECT_EQ(config.series[0].x_field, "linear/y");
-  EXPECT_EQ(config.series[0].field, "linear/x");
-  EXPECT_EQ(config.series[0].label, "Linear X");
+  EXPECT_EQ(config.series[0].topic, "/odom");
+  EXPECT_EQ(config.series[0].x_field, "pose/pose/position/x");
+  EXPECT_EQ(config.series[0].y_field, "pose/pose/position/y");
+  EXPECT_EQ(config.series[0].field, "pose/pose/position/y");
+  EXPECT_EQ(config.series[0].label, "Odom Position");
   EXPECT_EQ(config.series[0].color.red, 255);
   EXPECT_EQ(config.series[0].color.green, 80);
   EXPECT_EQ(config.series[0].color.blue, 20);
@@ -480,8 +534,11 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.time.window_seconds, 45.0);
   EXPECT_EQ(config.time.refresh_rate_hz, 12.0);
   EXPECT_EQ(config.time.source, TimeSource::HeaderStamp);
+  EXPECT_EQ(config.time.xy_history_mode, XYHistoryMode::AllSamples);
+  EXPECT_EQ(config.plot_mode, PlotMode::XY);
   EXPECT_EQ(config.x_axis.mode, XAxisMode::Field);
   EXPECT_EQ(config.x_axis.scale_mode, AxisScaleMode::Fixed);
+  EXPECT_EQ(config.x_axis.axis_scale_mode, XYAxisScaleMode::Equal);
   EXPECT_EQ(config.x_axis.fixed_min, -4.0);
   EXPECT_EQ(config.x_axis.fixed_max, 4.0);
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Fixed);
@@ -624,6 +681,7 @@ TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
   auto * action = findChild(series_1, "Action");
   ASSERT_NE(nullptr, action);
   action->setValue("Duplicate");
+  processQtEvents();
 
   EXPECT_EQ(series_count->getValue().toInt(), 3);
   series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
@@ -637,6 +695,7 @@ TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
   action = findChild(series_3, "Action");
   ASSERT_NE(nullptr, action);
   action->setValue("Move Up");
+  processQtEvents();
   series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
   series_3 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3");
   ASSERT_NE(nullptr, series_2);
@@ -647,6 +706,7 @@ TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
   action = findChild(series_3, "Action");
   ASSERT_NE(nullptr, action);
   action->setValue("Delete");
+  processQtEvents();
 
   EXPECT_EQ(series_count->getValue().toInt(), 2);
   EXPECT_EQ(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3"));

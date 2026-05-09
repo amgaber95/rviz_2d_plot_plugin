@@ -124,6 +124,8 @@ void Plot2DController::configure(
   header_stamp_extractors_.reserve(config_.series.size());
 
   for (const SeriesConfig & series : config_.series) {
+    const bool xy_mode = config_.plot_mode == PlotMode::XY;
+    const std::string & y_field = xy_mode ? series.y_field : series.field;
     PlotSeriesControllerState series_state;
     series_state.label = series.label;
     std::unique_ptr<GenericFieldExtractor> extractor;
@@ -139,7 +141,7 @@ void Plot2DController::configure(
     }
 
     const PlotPathResolution resolution =
-      resolveTopicFieldPath(series.topic, series.field, topics);
+      resolveTopicFieldPath(series.topic, y_field, topics);
     series_state.topic = resolution.topic;
     series_state.type = resolution.type;
 
@@ -165,7 +167,7 @@ void Plot2DController::configure(
     }
 
     std::unique_ptr<GenericFieldExtractor> x_extractor;
-    if (config_.x_axis.mode == XAxisMode::Field) {
+    if (xy_mode) {
       const PlotPathResolution x_resolution =
         resolveTopicFieldPath(series.topic, series.x_field, topics);
       if (x_resolution.status != PlotPathStatus::Ok ||
@@ -206,8 +208,9 @@ void Plot2DController::configure(
       previous_state.series[series_index].topic == resolution.topic &&
       previous_state.series[series_index].type == resolution.type &&
       previous_config.series[series_index].field == series.field &&
+      previous_config.series[series_index].y_field == series.y_field &&
       previous_config.series[series_index].x_field == series.x_field &&
-      previous_config.x_axis.mode == config_.x_axis.mode &&
+      previous_config.plot_mode == config_.plot_mode &&
       previous_config.time.source == config_.time.source)
     {
       series_state.samples = previous_state.series[series_index].samples;
@@ -268,8 +271,9 @@ bool Plot2DController::appendSerializedMessage(
       }
     }
 
+    const bool xy_mode = config_.plot_mode == PlotMode::XY;
     double x_value = sample_time;
-    if (config_.x_axis.mode == XAxisMode::Field) {
+    if (xy_mode) {
       if (i >= x_extractors_.size() || !x_extractors_[i]) {
         continue;
       }
@@ -287,7 +291,9 @@ bool Plot2DController::appendSerializedMessage(
     series.status = PlotControllerStatus::Ok;
     series.message.clear();
     series.samples.append(sample_time, x_value, transformed_value);
-    series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
+    if (!xy_mode || config_.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
+      series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
+    }
     series.latest_value = transformed_value;
     appended = true;
   }

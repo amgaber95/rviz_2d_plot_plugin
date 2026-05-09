@@ -40,6 +40,24 @@ enum class XAxisMode
   Field,
 };
 
+enum class PlotMode
+{
+  TimeSeries,
+  XY,
+};
+
+enum class XYHistoryMode
+{
+  RollingTimeWindow,
+  AllSamples,
+};
+
+enum class XYAxisScaleMode
+{
+  Independent,
+  Equal,
+};
+
 enum class TimeSource
 {
   ReceiveTime,
@@ -75,6 +93,7 @@ struct XAxisConfig
 {
   XAxisMode mode{XAxisMode::Time};
   AxisScaleMode scale_mode{AxisScaleMode::Auto};
+  XYAxisScaleMode axis_scale_mode{XYAxisScaleMode::Independent};
   double fixed_min{-1.0};
   double fixed_max{1.0};
   double padding_fraction{0.08};
@@ -89,6 +108,7 @@ struct TimeConfig
   double refresh_rate_hz{20.0};
   bool paused{false};
   TimeSource source{TimeSource::ReceiveTime};
+  XYHistoryMode xy_history_mode{XYHistoryMode::RollingTimeWindow};
 
   void repair();
 };
@@ -119,6 +139,7 @@ struct SeriesConfig
   bool enabled{true};
   std::string topic;
   std::string x_field;
+  std::string y_field;
   std::string field;
   std::string label{"Series"};
   SeriesColor color;
@@ -149,6 +170,7 @@ struct Plot2DConfig
 {
   std::vector<SeriesConfig> series{SeriesConfig{}};
   std::vector<ReferenceConfig> references;
+  PlotMode plot_mode{PlotMode::TimeSeries};
   XAxisConfig x_axis;
   AxisConfig y_axis;
   TimeConfig time;
