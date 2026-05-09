@@ -172,6 +172,28 @@ TEST(Plot2DRenderer, MinorGridAddsSubtleIntermediateLines)
   EXPECT_GT(countDifferentPixels(with_minor, major_only), 0);
 }
 
+TEST(Plot2DRenderer, TimeSeriesGridAndLabelsStayAnchoredAsNowAdvances)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 100.0;
+  settings.window_seconds = 50.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.x_major_tick_count = 6;
+  settings.minor_grid_divisions = 0;
+
+  const QImage first = renderer.render(settings, {});
+  settings.now = 101.0;
+  const QImage second = renderer.render(settings, {});
+
+  EXPECT_EQ(countDifferentPixels(first, second), 0);
+}
+
 TEST(Plot2DRenderer, DrawsSeriesSamples)
 {
   ensureQtApplication();

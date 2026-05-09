@@ -46,6 +46,11 @@ double mapX(const QRectF & rect, const PlotRange & range, const double value)
   return rect.left() + clampedRatio((value - range.min) / range.span()) * rect.width();
 }
 
+double mapTimeAgeX(const QRectF & rect, const double window_seconds, const double age_seconds)
+{
+  return rect.right() - clampedRatio(age_seconds / window_seconds) * rect.width();
+}
+
 double mapY(const QRectF & rect, const PlotRange & range, const double value)
 {
   return rect.bottom() - clampedRatio((value - range.min) / range.span()) * rect.height();
@@ -171,7 +176,9 @@ void drawGrid(
     std::clamp(settings.y_major_tick_count, 2, 20));
   const std::size_t minor_divisions = static_cast<std::size_t>(
     std::clamp(settings.minor_grid_divisions, 0, 8));
-  const TickSet x_ticks = generateTicks(x_range, x_major_count, minor_divisions);
+  const TickSet x_ticks = settings.x_axis_mode == XAxisMode::Time ?
+    generateTicks(PlotRange{0.0, settings.window_seconds}, x_major_count, minor_divisions) :
+    generateTicks(x_range, x_major_count, minor_divisions);
   const TickSet y_ticks = generateTicks(y_range, y_major_count, minor_divisions);
 
   if (settings.show_minor_grid) {
@@ -181,7 +188,9 @@ void drawGrid(
       painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
     for (const double tick : x_ticks.minor) {
-      const double x = mapX(rect, x_range, tick);
+      const double x = settings.x_axis_mode == XAxisMode::Time ?
+        mapTimeAgeX(rect, settings.window_seconds, tick) :
+        mapX(rect, x_range, tick);
       painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
     }
   }
@@ -193,7 +202,9 @@ void drawGrid(
       painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
     for (const double tick : x_ticks.major) {
-      const double x = mapX(rect, x_range, tick);
+      const double x = settings.x_axis_mode == XAxisMode::Time ?
+        mapTimeAgeX(rect, settings.window_seconds, tick) :
+        mapX(rect, x_range, tick);
       painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
     }
   }
@@ -211,9 +222,11 @@ void drawGrid(
   }
 
   for (const double tick : x_ticks.major) {
-    const double x = mapX(rect, x_range, tick);
+    const double x = settings.x_axis_mode == XAxisMode::Time ?
+      mapTimeAgeX(rect, settings.window_seconds, tick) :
+      mapX(rect, x_range, tick);
     const QString label = settings.x_axis_mode == XAxisMode::Time ?
-      formatTimeOffset(tick - settings.now) :
+      formatTimeOffset(-tick) :
       QString::fromStdString(formatValue(tick));
     painter.drawText(
       QRectF(x - 30.0, rect.bottom() + 4.0, 60.0, 18.0),
