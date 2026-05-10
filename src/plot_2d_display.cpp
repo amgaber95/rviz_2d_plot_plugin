@@ -485,6 +485,7 @@ void addLegendPositionOptions(rviz_common::properties::EnumProperty * property)
 }
 
 constexpr const char * kNoReferencePreset = "None";
+constexpr int kReferenceFixedPropertyCount = 5;
 
 void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
 {
@@ -493,16 +494,20 @@ void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
   }
   property->addOptionStd(kNoReferencePreset);
   property->addOptionStd("Zero Line");
+  property->addOptionStd("Target Value");
   property->addOptionStd("Upper Limit");
   property->addOptionStd("Lower Limit");
+  property->addOptionStd("Tolerance Band");
   property->addOptionStd("Symmetric Limits");
 }
 
 std::vector<ReferenceConfig> referencePresetFromName(
   const std::string & name,
-  const double preset_value)
+  const double preset_value,
+  const double preset_tolerance)
 {
   const double value = std::isfinite(preset_value) ? preset_value : 0.0;
+  const double tolerance = std::isfinite(preset_tolerance) ? std::abs(preset_tolerance) : 0.0;
 
   if (name == "Zero Line") {
     ReferenceConfig reference;
@@ -512,6 +517,17 @@ std::vector<ReferenceConfig> referencePresetFromName(
     reference.alpha = 0.65;
     reference.line_width = 1.0;
     reference.line_style = LineStyle::Dot;
+    return {reference};
+  }
+
+  if (name == "Target Value") {
+    ReferenceConfig reference;
+    reference.value = value;
+    reference.label = "Target";
+    reference.color = SeriesColor{80, 170, 255};
+    reference.alpha = 0.9;
+    reference.line_width = 1.2;
+    reference.line_style = LineStyle::Solid;
     return {reference};
   }
 
@@ -537,10 +553,28 @@ std::vector<ReferenceConfig> referencePresetFromName(
     return {reference};
   }
 
-  if (name == "Symmetric Limits") {
-    const double magnitude = std::abs(value);
+  if (name == "Tolerance Band") {
     ReferenceConfig upper;
-    upper.value = magnitude;
+    upper.value = value + tolerance;
+    upper.label = "Tolerance Upper";
+    upper.color = SeriesColor{255, 180, 60};
+    upper.alpha = 0.9;
+    upper.line_width = 1.2;
+    upper.line_style = LineStyle::Dash;
+
+    ReferenceConfig lower;
+    lower.value = value - tolerance;
+    lower.label = "Tolerance Lower";
+    lower.color = SeriesColor{255, 180, 60};
+    lower.alpha = 0.9;
+    lower.line_width = 1.2;
+    lower.line_style = LineStyle::Dash;
+    return {upper, lower};
+  }
+
+  if (name == "Symmetric Limits") {
+    ReferenceConfig upper;
+    upper.value = value + tolerance;
     upper.label = "Upper Limit";
     upper.color = SeriesColor{255, 180, 60};
     upper.alpha = 0.9;
@@ -548,7 +582,7 @@ std::vector<ReferenceConfig> referencePresetFromName(
     upper.line_style = LineStyle::Dash;
 
     ReferenceConfig lower;
-    lower.value = -magnitude;
+    lower.value = value - tolerance;
     lower.label = "Lower Limit";
     lower.color = SeriesColor{80, 170, 255};
     lower.alpha = 0.9;
@@ -663,13 +697,22 @@ Plot2DDisplay::Plot2DDisplay()
   references_root_property_ = new rviz_common::properties::Property(
     "References", QVariant(), "Horizontal reference lines.", this);
   reference_preset_property_ = new rviz_common::properties::EnumProperty(
-    "Add Preset", kNoReferencePreset, "Append a common reference line preset.",
-    references_root_property_, SLOT(onReferencePresetChanged()), this);
+    "Preset", kNoReferencePreset, "Common reference line presets.",
+    references_root_property_);
   addReferencePresetOptions(reference_preset_property_);
   reference_preset_value_property_ = new rviz_common::properties::FloatProperty(
-    "Preset Value", 1.0F,
-    "Y-axis value used by single-line presets. Symmetric limits use +/- this value.",
+    "Preset Value", 0.0F,
+    "Y-axis value used by the selected preset.",
     references_root_property_);
+  reference_preset_tolerance_property_ = new rviz_common::properties::FloatProperty(
+    "Preset Tolerance", 0.1F,
+    "Half-width used by tolerance and symmetric limit presets.",
+    references_root_property_);
+  reference_preset_tolerance_property_->setMin(0.0F);
+  apply_reference_preset_property_ = new rviz_common::properties::BoolProperty(
+    "Apply Preset", false, "Append the selected preset to the reference list.",
+    references_root_property_, SLOT(onApplyReferencePresetChanged()), this);
+  apply_reference_preset_property_->setShouldBeSaved(false);
   reference_count_property_ = new rviz_common::properties::IntProperty(
     "Reference Count", 0, "Number of horizontal reference lines.",
     references_root_property_, SLOT(onReferenceCountChanged()), this, 0, 12);
@@ -928,20 +971,15 @@ void Plot2DDisplay::onSeriesActionChanged()
     });
 }
 
-void Plot2DDisplay::onReferencePresetChanged()
+void Plot2DDisplay::onApplyReferencePresetChanged()
 {
-  if (!reference_preset_property_) {
-    return;
-  }
-
-  const std::string preset = reference_preset_property_->getStdString();
-  if (preset == kNoReferencePreset) {
+  if (!apply_reference_preset_property_ || !apply_reference_preset_property_->getBool()) {
     return;
   }
 
   appendReferencePreset_();
-  const QSignalBlocker blocker(reference_preset_property_);
-  reference_preset_property_->setValue(kNoReferencePreset);
+  const QSignalBlocker blocker(apply_reference_preset_property_);
+  apply_reference_preset_property_->setBool(false);
 }
 
 void Plot2DDisplay::onReferenceCountChanged()
@@ -1210,7 +1248,7 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     reference_count_property_->setInt(repaired_count);
   }
 
-  references_root_property_->removeChildren(3);
+  references_root_property_->removeChildren(kReferenceFixedPropertyCount);
   reference_properties_.clear();
   reference_properties_.reserve(static_cast<std::size_t>(repaired_count));
 
@@ -1257,8 +1295,10 @@ void Plot2DDisplay::appendReferencePreset_()
 {
   const double preset_value = reference_preset_value_property_ ?
     reference_preset_value_property_->getFloat() : 0.0;
+  const double preset_tolerance = reference_preset_tolerance_property_ ?
+    reference_preset_tolerance_property_->getFloat() : 0.0;
   std::vector<ReferenceConfig> additions = referencePresetFromName(
-    reference_preset_property_->getStdString(), preset_value);
+    reference_preset_property_->getStdString(), preset_value, preset_tolerance);
   if (additions.empty()) {
     return;
   }

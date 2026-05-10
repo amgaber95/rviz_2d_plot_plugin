@@ -78,7 +78,7 @@ private Q_SLOTS:
   void onPlotModeChanged();
   void onSeriesCountChanged();
   void onSeriesActionChanged();
-  void onReferencePresetChanged();
+  void onApplyReferencePresetChanged();
   void onReferenceCountChanged();
   void onClearHistoryChanged();
   void onTopicOptionsRequested(
@@ -202,6 +202,8 @@ private:
   rviz_common::properties::Property * references_root_property_{nullptr};
   rviz_common::properties::EnumProperty * reference_preset_property_{nullptr};
   rviz_common::properties::FloatProperty * reference_preset_value_property_{nullptr};
+  rviz_common::properties::FloatProperty * reference_preset_tolerance_property_{nullptr};
+  rviz_common::properties::BoolProperty * apply_reference_preset_property_{nullptr};
   rviz_common::properties::IntProperty * reference_count_property_{nullptr};
   std::vector<ReferencePropertySet> reference_properties_;
   rviz_common::properties::Property * legend_root_property_{nullptr};

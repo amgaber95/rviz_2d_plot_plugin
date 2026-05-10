@@ -393,8 +393,10 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(grid, "Minor Divisions"));
 
   auto * references = Plot2DDisplayTestAccessor::referencesRoot(display);
-  EXPECT_NE(nullptr, findChild(references, "Add Preset"));
+  EXPECT_NE(nullptr, findChild(references, "Preset"));
   EXPECT_NE(nullptr, findChild(references, "Preset Value"));
+  EXPECT_NE(nullptr, findChild(references, "Preset Tolerance"));
+  EXPECT_NE(nullptr, findChild(references, "Apply Preset"));
   EXPECT_NE(nullptr, findChild(references, "Reference Count"));
 
   auto * legend = Plot2DDisplayTestAccessor::legendRoot(display);
@@ -630,24 +632,38 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   ASSERT_NE(nullptr, reference_1);
   findChild(reference_1, "Value")->setValue(0.25);
   findChild(reference_1, "Label")->setValue("Existing");
+  auto * preset = findChild(references_root, "Preset");
   auto * preset_value = findChild(references_root, "Preset Value");
-  auto * add_preset = findChild(references_root, "Add Preset");
+  auto * preset_tolerance = findChild(references_root, "Preset Tolerance");
+  auto * apply_preset = findChild(references_root, "Apply Preset");
+  ASSERT_NE(nullptr, preset);
   ASSERT_NE(nullptr, preset_value);
-  ASSERT_NE(nullptr, add_preset);
-  preset_value->setValue(0.75);
+  ASSERT_NE(nullptr, preset_tolerance);
+  ASSERT_NE(nullptr, apply_preset);
+  preset->setValue("Symmetric Limits");
+  preset_value->setValue(1.0);
+  preset_tolerance->setValue(0.25);
 
-  add_preset->setValue("Upper Limit");
+  EXPECT_EQ(reference_count->getValue().toInt(), 1);
+  EXPECT_EQ(nullptr, findChild(references_root, "Reference 2"));
 
-  EXPECT_EQ(reference_count->getValue().toInt(), 2);
+  apply_preset->setValue(true);
+
+  EXPECT_FALSE(apply_preset->getValue().toBool());
+  EXPECT_EQ(reference_count->getValue().toInt(), 3);
   reference_1 = findChild(references_root, "Reference 1");
   auto * reference_2 = findChild(references_root, "Reference 2");
+  auto * reference_3 = findChild(references_root, "Reference 3");
   ASSERT_NE(nullptr, reference_1);
   ASSERT_NE(nullptr, reference_2);
+  ASSERT_NE(nullptr, reference_3);
   EXPECT_DOUBLE_EQ(findChild(reference_1, "Value")->getValue().toDouble(), 0.25);
   EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "Existing");
-  EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 0.75);
+  EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 1.25);
   EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Upper Limit");
-  EXPECT_EQ(add_preset->getValue().toString(), "None");
+  EXPECT_DOUBLE_EQ(findChild(reference_3, "Value")->getValue().toDouble(), 0.75);
+  EXPECT_EQ(findChild(reference_3, "Label")->getValue().toString(), "Lower Limit");
+  EXPECT_EQ(preset->getValue().toString(), "Symmetric Limits");
 }
 
 TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
