@@ -332,26 +332,46 @@ void drawReferences(
   const PlotRenderSettings & settings)
 {
   for (const RenderableReference & reference : references) {
-    if (!reference.enabled || reference.value < y_range.min || reference.value > y_range.max) {
+    if (!reference.enabled) {
       continue;
     }
 
-    const double y = mapY(rect, y_range, reference.value);
-    painter.setPen(
-      QPen(
-        reference.color,
-        std::max(1.0, reference.line_width),
-        qtPenStyle(reference.line_style),
-        Qt::RoundCap,
-        Qt::RoundJoin));
-    painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+    const double tolerance = std::isfinite(reference.tolerance) ?
+      std::max(0.0, reference.tolerance) : 0.0;
+    if (tolerance > 0.0) {
+      const double lower = reference.value - tolerance;
+      const double upper = reference.value + tolerance;
+      if (upper >= y_range.min && lower <= y_range.max) {
+        const double band_min = std::max(lower, y_range.min);
+        const double band_max = std::min(upper, y_range.max);
+        const double top = mapY(rect, y_range, band_max);
+        const double bottom = mapY(rect, y_range, band_min);
+        QColor fill_color = reference.color;
+        fill_color.setAlpha(std::clamp(reference.color.alpha() / 5, 12, 48));
+        painter.fillRect(
+          QRectF(rect.left(), top, rect.width(), std::max(1.0, bottom - top)),
+          fill_color);
+      }
+    }
 
-    if (!reference.label.empty()) {
-      painter.setPen(QPen(settings.text_color, 1.0));
-      painter.drawText(
-        QRectF(rect.left() + 6.0, y - 15.0, rect.width() - 12.0, 14.0),
-        Qt::AlignRight | Qt::AlignVCenter,
-        QString::fromStdString(reference.label));
+    if (reference.value >= y_range.min && reference.value <= y_range.max) {
+      const double y = mapY(rect, y_range, reference.value);
+      painter.setPen(
+        QPen(
+          reference.color,
+          std::max(1.0, reference.line_width),
+          qtPenStyle(reference.line_style),
+          Qt::RoundCap,
+          Qt::RoundJoin));
+      painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+
+      if (!reference.label.empty()) {
+        painter.setPen(QPen(settings.text_color, 1.0));
+        painter.drawText(
+          QRectF(rect.left() + 6.0, y - 15.0, rect.width() - 12.0, 14.0),
+          Qt::AlignRight | Qt::AlignVCenter,
+          QString::fromStdString(reference.label));
+      }
     }
   }
 }

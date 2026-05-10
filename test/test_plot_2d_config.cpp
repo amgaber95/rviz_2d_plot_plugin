@@ -146,6 +146,7 @@ TEST(Plot2DConfig, RepairsInvalidReferenceAppearanceValues)
   config.references.front().color.green = -4;
   config.references.front().alpha = 4.0;
   config.references.front().line_width = -1.0;
+  config.references.front().tolerance = -0.2;
 
   config.repair();
 
@@ -154,4 +155,5 @@ TEST(Plot2DConfig, RepairsInvalidReferenceAppearanceValues)
   EXPECT_EQ(config.references.front().color.green, 0);
   EXPECT_DOUBLE_EQ(config.references.front().alpha, 1.0);
   EXPECT_DOUBLE_EQ(config.references.front().line_width, 1.0);
+  EXPECT_DOUBLE_EQ(config.references.front().tolerance, 0.0);
 }

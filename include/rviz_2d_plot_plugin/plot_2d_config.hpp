@@ -158,6 +158,7 @@ struct ReferenceConfig
 {
   bool enabled{true};
   double value{0.0};
+  double tolerance{0.0};
   std::string label;
   SeriesColor color{255, 180, 60};
   double alpha{1.0};

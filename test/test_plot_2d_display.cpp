@@ -594,6 +594,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   ASSERT_NE(nullptr, reference);
   findChild(reference, "Enabled")->setValue(true);
   findChild(reference, "Value")->setValue(0.5);
+  findChild(reference, "Tolerance")->setValue(0.2);
   findChild(reference, "Label")->setValue("Limit");
   findChild(reference, "Color")->setValue(QColor(255, 180, 60));
   findChild(reference, "Alpha")->setValue(0.6);
@@ -643,6 +644,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   ASSERT_EQ(config.references.size(), 1U);
   EXPECT_TRUE(config.references[0].enabled);
   EXPECT_DOUBLE_EQ(config.references[0].value, 0.5);
+  EXPECT_NEAR(config.references[0].tolerance, 0.2, 1e-6);
   EXPECT_EQ(config.references[0].label, "Limit");
   EXPECT_EQ(config.references[0].color.red, 255);
   EXPECT_EQ(config.references[0].color.green, 180);

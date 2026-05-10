@@ -134,6 +134,7 @@ private:
     rviz_common::properties::Property * root{nullptr};
     rviz_common::properties::BoolProperty * enabled{nullptr};
     rviz_common::properties::FloatProperty * value{nullptr};
+    rviz_common::properties::FloatProperty * tolerance{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
     rviz_common::properties::ColorProperty * color{nullptr};
     rviz_common::properties::FloatProperty * alpha{nullptr};

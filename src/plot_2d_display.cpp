@@ -1094,6 +1094,7 @@ std::vector<ReferenceConfig> Plot2DDisplay::referenceConfigFromProperties_() con
     ReferenceConfig config;
     config.enabled = properties.enabled && properties.enabled->getBool();
     config.value = properties.value ? properties.value->getFloat() : 0.0;
+    config.tolerance = properties.tolerance ? properties.tolerance->getFloat() : 0.0;
     config.label = properties.label ? properties.label->getStdString() : "";
     config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
       SeriesColor{255, 180, 60};
@@ -1296,6 +1297,11 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     properties.value = new rviz_common::properties::FloatProperty(
       "Value", value.value, "Y-axis value for this reference line.", properties.root,
       SLOT(onConfigPropertyChanged()), this);
+    properties.tolerance = new rviz_common::properties::FloatProperty(
+      "Tolerance", value.tolerance,
+      "Optional symmetric tolerance around the reference value.", properties.root,
+      SLOT(onConfigPropertyChanged()), this);
+    properties.tolerance->setMin(0.0F);
     properties.label = new rviz_common::properties::StringProperty(
       "Label", QString::fromStdString(value.label), "Reference label.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
@@ -1601,6 +1607,7 @@ std::vector<RenderableReference> Plot2DDisplay::renderableReferencesFromConfig_(
     RenderableReference reference;
     reference.enabled = source.enabled;
     reference.value = source.value;
+    reference.tolerance = source.tolerance;
     reference.label = source.label;
     reference.color = toQColor(source.color);
     reference.color.setAlphaF(source.alpha);

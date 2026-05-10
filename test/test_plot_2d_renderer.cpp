@@ -529,6 +529,33 @@ TEST(Plot2DRenderer, DrawsEnabledReferenceLines)
   EXPECT_GT(countPixelsCloseTo(image, QColor(255, 180, 60)), 0);
 }
 
+TEST(Plot2DRenderer, DrawsReferenceToleranceBands)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.show_major_grid = false;
+  settings.show_minor_grid = false;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableReference reference;
+  reference.value = 0.0;
+  reference.color = QColor(255, 180, 60);
+  reference.line_width = 2.0;
+
+  const QImage line_only = renderer.render(settings, {}, {reference});
+  reference.tolerance = 0.35;
+  const QImage with_band = renderer.render(settings, {}, {reference});
+
+  EXPECT_GT(countDifferentPixels(with_band, line_only), 1000);
+}
+
 TEST(Plot2DRenderer, PlacesLegendAtConfiguredCorner)
 {
   ensureQtApplication();

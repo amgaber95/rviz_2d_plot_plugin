@@ -36,6 +36,7 @@ struct RenderableReference
   std::string label;
   QColor color{255, 180, 60};
   double value{0.0};
+  double tolerance{0.0};
   double line_width{1.2};
   LineStyle line_style{LineStyle::Solid};
   bool enabled{true};

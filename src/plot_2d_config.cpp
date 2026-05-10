@@ -93,6 +93,9 @@ void ReferenceConfig::repair()
   if (!std::isfinite(value)) {
     value = 0.0;
   }
+  if (!std::isfinite(tolerance) || tolerance < 0.0) {
+    tolerance = 0.0;
+  }
   if (!std::isfinite(alpha)) {
     alpha = 1.0;
   }
