@@ -786,6 +786,9 @@ Plot2DDisplay::Plot2DDisplay()
   text_color_property_ = new rviz_common::properties::ColorProperty(
     "Text Color", QColor(245, 245, 245), "Axis and legend text color.",
     style_root_property_, SLOT(onConfigPropertyChanged()), this);
+  font_size_property_ = new rviz_common::properties::IntProperty(
+    "Font Size", 8, "Axis, legend, and reference label font size in points.",
+    style_root_property_, SLOT(onRenderPropertyChanged()), this, 6, 16);
   updateModePropertyVisibility_();
 }
 
@@ -1470,6 +1473,7 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.grid_color.setAlpha(80);
   settings.text_color = text_color_property_->getColor();
   settings.text_color.setAlpha(235);
+  settings.font_size = font_size_property_ ? font_size_property_->getInt() : 8;
   settings.show_legend = show_legend_property_ ? show_legend_property_->getBool() : true;
   settings.show_latest_values = show_latest_values_property_ ?
     show_latest_values_property_->getBool() : true;

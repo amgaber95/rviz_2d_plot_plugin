@@ -225,6 +225,7 @@ private:
   rviz_common::properties::ColorProperty * axis_color_property_{nullptr};
   rviz_common::properties::ColorProperty * grid_color_property_{nullptr};
   rviz_common::properties::ColorProperty * text_color_property_{nullptr};
+  rviz_common::properties::IntProperty * font_size_property_{nullptr};
 
   std::shared_ptr<rviz_2d_overlay_plugins::OverlayObject> overlay_;
   rclcpp::Node::SharedPtr node_;

@@ -422,6 +422,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(style, "Axis Color"));
   EXPECT_NE(nullptr, findChild(style, "Grid Color"));
   EXPECT_NE(nullptr, findChild(style, "Text Color"));
+  EXPECT_NE(nullptr, findChild(style, "Font Size"));
 }
 
 TEST(Plot2DDisplay, PlotModeSwitchesBetweenTimeAndXYSeriesFields)
@@ -721,6 +722,18 @@ TEST(Plot2DDisplay, MapsBackgroundAlphaToRenderSettings)
   EXPECT_EQ(settings.background_color.green(), 20);
   EXPECT_EQ(settings.background_color.blue(), 30);
   EXPECT_NEAR(settings.background_color.alphaF(), 0.25, 1e-3);
+}
+
+TEST(Plot2DDisplay, MapsFontSizeToRenderSettings)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * style = findChild(&display, "Style");
+  ASSERT_NE(nullptr, style);
+  findChild(style, "Font Size")->setValue(12);
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_EQ(settings.font_size, 12);
 }
 
 TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)

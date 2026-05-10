@@ -68,6 +68,7 @@ struct PlotRenderSettings
   QColor axis_color{230, 230, 230, 230};
   QColor grid_color{130, 130, 130, 80};
   QColor text_color{245, 245, 245, 235};
+  int font_size{8};
   bool show_legend{true};
   bool show_latest_values{true};
   LegendPosition legend_position{LegendPosition::TopLeft};

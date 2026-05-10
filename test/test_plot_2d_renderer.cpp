@@ -586,3 +586,28 @@ TEST(Plot2DRenderer, AppliesLegendOffsets)
     countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(78, 38, 70, 24)),
     0);
 }
+
+TEST(Plot2DRenderer, FontSizeChangesTextRendering)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings small_font;
+  small_font.width = 320;
+  small_font.height = 160;
+  small_font.now = 10.0;
+  small_font.window_seconds = 10.0;
+  small_font.font_size = 6;
+
+  PlotRenderSettings large_font = small_font;
+  large_font.font_size = 14;
+
+  RenderableSeries series;
+  series.label = "Text";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{5.0, 0.5}, {10.0, 0.75}};
+
+  const QImage small_image = renderer.render(small_font, {series});
+  const QImage large_image = renderer.render(large_font, {series});
+
+  EXPECT_GT(countDifferentPixels(small_image, large_image), 100);
+}

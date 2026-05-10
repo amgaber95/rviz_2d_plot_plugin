@@ -434,7 +434,7 @@ QImage Plot2DRenderer::render(
 
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
-  painter.setFont(QFont(QStringLiteral("Sans Serif"), 8));
+  painter.setFont(QFont(QStringLiteral("Sans Serif"), std::clamp(settings.font_size, 6, 16)));
   drawGrid(painter, rect, x_range, y_range, settings);
   drawReferences(painter, rect, y_range, references, settings);
   for (const RenderableSeries & item : series) {
