@@ -681,7 +681,7 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   ASSERT_NE(nullptr, preset_value);
   ASSERT_NE(nullptr, preset_tolerance);
   ASSERT_NE(nullptr, apply_preset);
-  preset->setValue("Symmetric Limits");
+  preset->setValue("Tolerance Band");
   preset_value->setValue(1.0);
   preset_tolerance->setValue(0.25);
 
@@ -691,20 +691,25 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   apply_preset->setValue(true);
 
   EXPECT_FALSE(apply_preset->getValue().toBool());
-  EXPECT_EQ(reference_count->getValue().toInt(), 3);
+  EXPECT_EQ(reference_count->getValue().toInt(), 2);
   reference_1 = findChild(references_root, "Reference 1");
   auto * reference_2 = findChild(references_root, "Reference 2");
-  auto * reference_3 = findChild(references_root, "Reference 3");
   ASSERT_NE(nullptr, reference_1);
   ASSERT_NE(nullptr, reference_2);
-  ASSERT_NE(nullptr, reference_3);
   EXPECT_DOUBLE_EQ(findChild(reference_1, "Value")->getValue().toDouble(), 0.25);
   EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "Existing");
-  EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 1.25);
-  EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Upper Limit");
-  EXPECT_DOUBLE_EQ(findChild(reference_3, "Value")->getValue().toDouble(), 0.75);
-  EXPECT_EQ(findChild(reference_3, "Label")->getValue().toString(), "Lower Limit");
-  EXPECT_EQ(preset->getValue().toString(), "Symmetric Limits");
+  EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 1.0);
+  EXPECT_NEAR(findChild(reference_2, "Tolerance")->getValue().toDouble(), 0.25, 1e-6);
+  EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Target");
+  EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
+  EXPECT_EQ(preset->getValue().toString(), "Tolerance Band");
+
+  preset->setValue("Symmetric Limits");
+  apply_preset->setValue(true);
+
+  EXPECT_FALSE(apply_preset->getValue().toBool());
+  EXPECT_EQ(reference_count->getValue().toInt(), 2);
+  EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
 }
 
 TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)

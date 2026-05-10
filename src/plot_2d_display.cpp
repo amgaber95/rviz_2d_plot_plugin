@@ -511,7 +511,6 @@ void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd("Upper Limit");
   property->addOptionStd("Lower Limit");
   property->addOptionStd("Tolerance Band");
-  property->addOptionStd("Symmetric Limits");
 }
 
 std::vector<ReferenceConfig> referencePresetFromName(
@@ -567,41 +566,15 @@ std::vector<ReferenceConfig> referencePresetFromName(
   }
 
   if (name == "Tolerance Band") {
-    ReferenceConfig upper;
-    upper.value = value + tolerance;
-    upper.label = "Tolerance Upper";
-    upper.color = SeriesColor{255, 180, 60};
-    upper.alpha = 0.9;
-    upper.line_width = 1.2;
-    upper.line_style = LineStyle::Dash;
-
-    ReferenceConfig lower;
-    lower.value = value - tolerance;
-    lower.label = "Tolerance Lower";
-    lower.color = SeriesColor{255, 180, 60};
-    lower.alpha = 0.9;
-    lower.line_width = 1.2;
-    lower.line_style = LineStyle::Dash;
-    return {upper, lower};
-  }
-
-  if (name == "Symmetric Limits") {
-    ReferenceConfig upper;
-    upper.value = value + tolerance;
-    upper.label = "Upper Limit";
-    upper.color = SeriesColor{255, 180, 60};
-    upper.alpha = 0.9;
-    upper.line_width = 1.2;
-    upper.line_style = LineStyle::Dash;
-
-    ReferenceConfig lower;
-    lower.value = value - tolerance;
-    lower.label = "Lower Limit";
-    lower.color = SeriesColor{80, 170, 255};
-    lower.alpha = 0.9;
-    lower.line_width = 1.2;
-    lower.line_style = LineStyle::Dash;
-    return {upper, lower};
+    ReferenceConfig reference;
+    reference.value = value;
+    reference.tolerance = tolerance;
+    reference.label = "Target";
+    reference.color = SeriesColor{255, 180, 60};
+    reference.alpha = 0.9;
+    reference.line_width = 1.2;
+    reference.line_style = LineStyle::Solid;
+    return {reference};
   }
 
   return {};
