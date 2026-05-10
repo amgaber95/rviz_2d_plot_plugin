@@ -772,6 +772,11 @@ Plot2DDisplay::Plot2DDisplay()
   background_color_property_ = new rviz_common::properties::ColorProperty(
     "Background Color", QColor(0, 0, 0), "Plot background color.",
     style_root_property_, SLOT(onConfigPropertyChanged()), this);
+  background_alpha_property_ = new rviz_common::properties::FloatProperty(
+    "Background Alpha", 190.0F / 255.0F, "Plot background opacity from 0 to 1.",
+    style_root_property_, SLOT(onRenderPropertyChanged()), this);
+  background_alpha_property_->setMin(0.0F);
+  background_alpha_property_->setMax(1.0F);
   axis_color_property_ = new rviz_common::properties::ColorProperty(
     "Axis Color", QColor(230, 230, 230), "Axis and border color.",
     style_root_property_, SLOT(onConfigPropertyChanged()), this);
@@ -1456,7 +1461,9 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
   settings.fixed_y_max = config.y_axis.fixed_max;
   settings.y_padding_fraction = config.y_axis.padding_fraction;
   settings.background_color = background_color_property_->getColor();
-  settings.background_color.setAlpha(190);
+  const float background_alpha = background_alpha_property_ ?
+    background_alpha_property_->getFloat() : 190.0F / 255.0F;
+  settings.background_color.setAlphaF(std::clamp(background_alpha, 0.0F, 1.0F));
   settings.axis_color = axis_color_property_->getColor();
   settings.axis_color.setAlpha(230);
   settings.grid_color = grid_color_property_->getColor();

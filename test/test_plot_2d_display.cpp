@@ -418,6 +418,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   auto * style = findChild(&display, "Style");
   ASSERT_NE(nullptr, style);
   EXPECT_NE(nullptr, findChild(style, "Background Color"));
+  EXPECT_NE(nullptr, findChild(style, "Background Alpha"));
   EXPECT_NE(nullptr, findChild(style, "Axis Color"));
   EXPECT_NE(nullptr, findChild(style, "Grid Color"));
   EXPECT_NE(nullptr, findChild(style, "Text Color"));
@@ -704,6 +705,22 @@ TEST(Plot2DDisplay, MapsGridPropertiesToRenderSettings)
   EXPECT_EQ(settings.x_major_tick_count, 4);
   EXPECT_EQ(settings.y_major_tick_count, 7);
   EXPECT_EQ(settings.minor_grid_divisions, 2);
+}
+
+TEST(Plot2DDisplay, MapsBackgroundAlphaToRenderSettings)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * style = findChild(&display, "Style");
+  ASSERT_NE(nullptr, style);
+  findChild(style, "Background Color")->setValue(QColor(10, 20, 30));
+  findChild(style, "Background Alpha")->setValue(0.25);
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_EQ(settings.background_color.red(), 10);
+  EXPECT_EQ(settings.background_color.green(), 20);
+  EXPECT_EQ(settings.background_color.blue(), 30);
+  EXPECT_NEAR(settings.background_color.alphaF(), 0.25, 1e-3);
 }
 
 TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)
