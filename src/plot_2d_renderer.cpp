@@ -6,6 +6,7 @@
 
 #include "rviz_2d_plot_plugin/plot_2d_renderer.hpp"
 
+#include <QFont>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -13,10 +14,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iomanip>
-#include <sstream>
 
 #include "rviz_2d_plot_plugin/plot_range.hpp"
+#include "rviz_2d_plot_plugin/plot_value_formatter.hpp"
 #include "rviz_2d_plot_plugin/tick_generator.hpp"
 
 namespace rviz_2d_plot_plugin
@@ -127,11 +127,12 @@ void applyEqualXYScale(
   y_range = PlotRange{y_center - y_span * 0.5, y_center + y_span * 0.5};
 }
 
-std::string formatValue(const double value)
+double majorTickStep(const std::vector<double> & ticks)
 {
-  std::ostringstream stream;
-  stream << std::fixed << std::setprecision(2) << value;
-  return stream.str();
+  if (ticks.size() < 2) {
+    return 0.0;
+  }
+  return std::abs(ticks[1] - ticks[0]);
 }
 
 QString formatTimeOffset(const double seconds)
@@ -180,6 +181,8 @@ void drawGrid(
     generateTicks(PlotRange{0.0, settings.window_seconds}, x_major_count, minor_divisions) :
     generateTicks(x_range, x_major_count, minor_divisions);
   const TickSet y_ticks = generateTicks(y_range, y_major_count, minor_divisions);
+  const double x_step = majorTickStep(x_ticks.major);
+  const double y_step = majorTickStep(y_ticks.major);
 
   if (settings.show_minor_grid) {
     painter.setPen(QPen(scaledAlpha(settings.grid_color, 0.45), 1.0));
@@ -218,7 +221,7 @@ void drawGrid(
     painter.drawText(
       QRectF(2.0, y - 8.0, rect.left() - 6.0, 16.0),
       Qt::AlignRight | Qt::AlignVCenter,
-      QString::fromStdString(formatValue(tick)));
+      QString::fromStdString(formatAxisTickValue(tick, y_step)));
   }
 
   for (const double tick : x_ticks.major) {
@@ -227,7 +230,7 @@ void drawGrid(
       mapX(rect, x_range, tick);
     const QString label = settings.x_axis_mode == XAxisMode::Time ?
       formatTimeOffset(-tick) :
-      QString::fromStdString(formatValue(tick));
+      QString::fromStdString(formatAxisTickValue(tick, x_step));
     painter.drawText(
       QRectF(x - 30.0, rect.bottom() + 4.0, 60.0, 18.0),
       Qt::AlignHCenter | Qt::AlignVCenter,
@@ -362,7 +365,7 @@ void drawLegend(
     QString text = QString::fromStdString(item.label);
     if (settings.show_latest_values) {
       text += " ";
-      text += QString::fromStdString(formatValue(latest->value));
+      text += QString::fromStdString(formatPlotValue(latest->value));
     }
     text_width = std::max(
       text_width,
@@ -374,8 +377,8 @@ void drawLegend(
     return;
   }
 
-  const double line_height = 16.0;
-  const double legend_width = std::min(rect.width() - 8.0, std::max(88.0, text_width + 38.0));
+  const double line_height = 14.0;
+  const double legend_width = std::min(rect.width() - 8.0, std::max(72.0, text_width + 24.0));
   const double legend_height = line_height * static_cast<double>(entries.size());
   const bool align_right =
     settings.legend_position == LegendPosition::TopRight ||
@@ -390,11 +393,11 @@ void drawLegend(
 
   for (const LegendEntry & entry : entries) {
     painter.setPen(QPen(entry.color, 2.0));
-    painter.drawLine(QPointF(x + 4.0, y + 7.0), QPointF(x + 22.0, y + 7.0));
+    painter.drawLine(QPointF(x, y + 7.0), QPointF(x + 16.0, y + 7.0));
 
     painter.setPen(QPen(settings.text_color, 1.0));
-    painter.drawText(QRectF(x + 28.0, y, legend_width - 30.0, line_height), entry.text);
-    y += 16.0;
+    painter.drawText(QRectF(x + 20.0, y, legend_width - 20.0, line_height), entry.text);
+    y += line_height;
   }
 }
 
@@ -431,6 +434,7 @@ QImage Plot2DRenderer::render(
 
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
+  painter.setFont(QFont(QStringLiteral("Sans Serif"), 8));
   drawGrid(painter, rect, x_range, y_range, settings);
   drawReferences(painter, rect, y_range, references, settings);
   for (const RenderableSeries & item : series) {

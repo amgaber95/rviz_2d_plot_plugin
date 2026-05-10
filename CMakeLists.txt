@@ -28,6 +28,7 @@ add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/plot_2d_renderer.hpp
   include/rviz_2d_plot_plugin/plot_path_resolver.hpp
   include/rviz_2d_plot_plugin/plot_range.hpp
+  include/rviz_2d_plot_plugin/plot_value_formatter.hpp
   include/rviz_2d_plot_plugin/sample_buffer.hpp
   include/rviz_2d_plot_plugin/tick_generator.hpp
   include/rviz_2d_plot_plugin/topic_field_introspection.hpp
@@ -37,6 +38,7 @@ add_library(${PROJECT_NAME} SHARED
   src/plot_2d_renderer.cpp
   src/plot_path_resolver.cpp
   src/plot_range.cpp
+  src/plot_value_formatter.cpp
   src/sample_buffer.cpp
   src/tick_generator.cpp
   src/topic_field_introspection.cpp
@@ -118,6 +120,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
   target_link_libraries(test_plot_range ${PROJECT_NAME})
+
+  ament_add_gtest(test_plot_value_formatter test/test_plot_value_formatter.cpp)
+  target_link_libraries(test_plot_value_formatter ${PROJECT_NAME})
 
   ament_add_gtest(test_plot_2d_renderer test/test_plot_2d_renderer.cpp)
   target_link_libraries(test_plot_2d_renderer ${PROJECT_NAME})
