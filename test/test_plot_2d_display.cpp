@@ -462,6 +462,23 @@ TEST(Plot2DDisplay, PlotModeSwitchesBetweenTimeAndXYSeriesFields)
   EXPECT_FALSE(xy_history_mode->getHidden());
 }
 
+TEST(Plot2DDisplay, SeriesRootSummarizesConfiguredSourceForPlotMode)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+
+  findChild(series, "Topic")->setValue("/cmd_vel");
+  findChild(series, "Field")->setValue("linear/x");
+
+  EXPECT_EQ(series->getValue().toString(), "/cmd_vel/linear/x");
+
+  findChild(&display, "Plot Mode")->setValue("XY");
+
+  EXPECT_EQ(series->getValue().toString(), "/cmd_vel");
+}
+
 TEST(Plot2DDisplay, PreparesRvizOverlayRenderingBackend)
 {
   ensureQtApplication();

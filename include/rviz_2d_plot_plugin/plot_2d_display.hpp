@@ -152,6 +152,7 @@ private:
     const std::vector<ReferenceConfig> & values);
   void appendReferencePreset_();
   void updateModePropertyVisibility_();
+  void updateSeriesPropertySummaries_();
   const SeriesPropertySet * seriesPropertiesForField_(
     rviz_common::properties::EditableEnumProperty * property) const;
   void resolveAndSubscribe_();

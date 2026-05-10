@@ -269,6 +269,19 @@ PlotMode plotModeFromName(const std::string & name)
   return PlotMode::TimeSeries;
 }
 
+QString seriesSourceSummary(const SeriesConfig & series, const PlotMode plot_mode)
+{
+  if (series.topic.empty()) {
+    return {};
+  }
+  if (plot_mode == PlotMode::XY || series.field.empty()) {
+    return QString::fromStdString(series.topic);
+  }
+
+  const std::string separator = series.field.front() == '/' ? "" : "/";
+  return QString::fromStdString(series.topic + separator + series.field);
+}
+
 void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
 {
   if (!property) {
@@ -809,6 +822,7 @@ void Plot2DDisplay::load(const rviz_common::Config & config)
 
   rviz_common::Display::load(config);
   updateModePropertyVisibility_();
+  updateSeriesPropertySummaries_();
 }
 
 void Plot2DDisplay::onInitialize()
@@ -899,6 +913,7 @@ void Plot2DDisplay::reset()
 
 void Plot2DDisplay::onConfigPropertyChanged()
 {
+  updateSeriesPropertySummaries_();
   resolveAndSubscribe_();
   renderOverlay_();
 }
@@ -1235,6 +1250,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     series_properties_.push_back(properties);
   }
   updateModePropertyVisibility_();
+  updateSeriesPropertySummaries_();
 }
 
 void Plot2DDisplay::replaceSeriesProperties_(const std::vector<SeriesConfig> & values)
@@ -1349,6 +1365,20 @@ void Plot2DDisplay::updateModePropertyVisibility_()
     if (series.y_field) {
       series.y_field->setHidden(!xy_mode);
     }
+  }
+}
+
+void Plot2DDisplay::updateSeriesPropertySummaries_()
+{
+  const PlotMode plot_mode = plot_mode_property_ ?
+    plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
+  const std::vector<SeriesConfig> series = seriesConfigFromProperties_();
+  for (std::size_t i = 0; i < series_properties_.size() && i < series.size(); ++i) {
+    if (!series_properties_[i].root) {
+      continue;
+    }
+    const QSignalBlocker blocker(series_properties_[i].root);
+    series_properties_[i].root->setValue(seriesSourceSummary(series[i], plot_mode));
   }
 }
 
