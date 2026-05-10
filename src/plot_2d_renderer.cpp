@@ -377,7 +377,7 @@ void drawLegend(
   entries.reserve(series.size());
   double text_width = 0.0;
   for (const RenderableSeries & item : series) {
-    if (!item.enabled || item.samples.empty()) {
+    if (!item.enabled) {
       continue;
     }
 
@@ -389,12 +389,9 @@ void drawLegend(
         }
         return sample.time >= x_range.min && sample.time <= x_range.max;
       });
-    if (latest == item.samples.rend()) {
-      continue;
-    }
 
     QString text = QString::fromStdString(item.label);
-    if (settings.show_latest_values) {
+    if (settings.show_latest_values && latest != item.samples.rend()) {
       text += " ";
       text += QString::fromStdString(formatPlotValue(latest->value));
     }

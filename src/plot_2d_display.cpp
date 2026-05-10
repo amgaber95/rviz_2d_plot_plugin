@@ -1506,8 +1506,7 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
     const PlotSeriesControllerState & source = state.series[i];
     RenderableSeries series;
     series.label = source.label.empty() ? "Series" : source.label;
-    series.enabled = source.status == PlotControllerStatus::Ok &&
-      i < config.series.size() && config.series[i].enabled;
+    series.enabled = i < config.series.size() && config.series[i].enabled;
     if (i < config.series.size()) {
       series.color = toQColor(config.series[i].color);
       series.color.setAlphaF(config.series[i].line_alpha);

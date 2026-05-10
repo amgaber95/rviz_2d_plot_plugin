@@ -180,6 +180,11 @@ public:
     return display.controller_.state();
   }
 
+  static std::vector<RenderableSeries> renderableSeries(Plot2DDisplay & display)
+  {
+    return display.renderableSeries_();
+  }
+
   static std::vector<std::string> topicOptions(Plot2DDisplay & display)
   {
     return display.topicOptions_();
@@ -925,6 +930,26 @@ TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)
   ASSERT_EQ(state.series.size(), 1U);
   EXPECT_EQ(state.series[0].topic, "/value");
   EXPECT_EQ(state.series[0].type, "std_msgs/msg/Float64");
+}
+
+TEST(Plot2DDisplay, KeepsConfiguredSeriesRenderableBeforeTopicResolves)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/not_yet");
+  findChild(series, "Field")->setValue("data");
+  findChild(series, "Label")->setValue("Waiting");
+  Plot2DDisplayTestAccessor::setTopics(display, TopicTypeMap{});
+
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  const auto renderable = Plot2DDisplayTestAccessor::renderableSeries(display);
+  ASSERT_EQ(renderable.size(), 1U);
+  EXPECT_TRUE(renderable[0].enabled);
+  EXPECT_EQ(renderable[0].label, "Waiting");
+  EXPECT_TRUE(renderable[0].samples.empty());
 }
 
 TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)

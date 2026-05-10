@@ -555,6 +555,32 @@ TEST(Plot2DRenderer, PlacesLegendAtConfiguredCorner)
     0);
 }
 
+TEST(Plot2DRenderer, DrawsConfiguredLegendEntryBeforeSamplesArrive)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries series;
+  series.label = "Waiting";
+  series.color = QColor(250, 40, 40);
+
+  settings.show_latest_values = true;
+  const QImage with_values = renderer.render(settings, {series});
+  settings.show_latest_values = false;
+  const QImage without_values = renderer.render(settings, {series});
+
+  EXPECT_GT(countPixelsCloseTo(with_values, QColor(250, 40, 40)), 0);
+  EXPECT_EQ(countDifferentPixels(with_values, without_values), 0);
+}
+
 TEST(Plot2DRenderer, HidesLegendWhenDisabled)
 {
   ensureQtApplication();
