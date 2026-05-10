@@ -34,6 +34,7 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_EQ(config.series.front().y_field, "");
   EXPECT_EQ(config.series.front().field, "");
   EXPECT_EQ(config.series.front().label, "Series");
+  EXPECT_EQ(config.series.front().unit, "");
   EXPECT_EQ(config.series.front().color.red, 80);
   EXPECT_EQ(config.series.front().color.green, 170);
   EXPECT_EQ(config.series.front().color.blue, 255);

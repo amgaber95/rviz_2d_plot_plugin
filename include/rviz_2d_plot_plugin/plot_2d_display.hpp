@@ -119,6 +119,7 @@ private:
     rviz_common::properties::EditableEnumProperty * y_field{nullptr};
     rviz_common::properties::EditableEnumProperty * field{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
+    rviz_common::properties::StringProperty * unit{nullptr};
     rviz_common::properties::ColorProperty * color{nullptr};
     rviz_common::properties::FloatProperty * line_width{nullptr};
     rviz_common::properties::FloatProperty * line_alpha{nullptr};

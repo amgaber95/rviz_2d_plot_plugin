@@ -394,6 +394,10 @@ void drawLegend(
     if (settings.show_latest_values && latest != item.samples.rend()) {
       text += " ";
       text += QString::fromStdString(formatPlotValue(latest->value));
+      if (!item.unit.empty()) {
+        text += " ";
+        text += QString::fromStdString(item.unit);
+      }
     }
     text_width = std::max(
       text_width,

@@ -142,6 +142,7 @@ struct SeriesConfig
   std::string y_field;
   std::string field;
   std::string label{"Series"};
+  std::string unit;
   SeriesColor color;
   double line_width{2.0};
   double line_alpha{1.0};

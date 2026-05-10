@@ -1070,6 +1070,7 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.y_field = properties.y_field ? properties.y_field->getStdString() : "";
     config.field = properties.field ? properties.field->getStdString() : "";
     config.label = properties.label ? properties.label->getStdString() : "Series";
+    config.unit = properties.unit ? properties.unit->getStdString() : "";
     config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
       defaultSeriesColor(series.size());
     config.line_width = properties.line_width ? properties.line_width->getFloat() : 2.0;
@@ -1220,6 +1221,9 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       &Plot2DDisplay::onFieldOptionsRequested);
     properties.label = new rviz_common::properties::StringProperty(
       "Label", QString::fromStdString(value.label), "Legend label for this series.",
+      properties.root, SLOT(onConfigPropertyChanged()), this);
+    properties.unit = new rviz_common::properties::StringProperty(
+      "Unit", QString::fromStdString(value.unit), "Optional legend unit shown after values.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
     properties.color = new rviz_common::properties::ColorProperty(
       "Color", toQColor(value.color), "Series line color.",
@@ -1538,6 +1542,7 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
     series.label = source.label.empty() ? "Series" : source.label;
     series.enabled = i < config.series.size() && config.series[i].enabled;
     if (i < config.series.size()) {
+      series.unit = config.series[i].unit;
       series.color = toQColor(config.series[i].color);
       series.color.setAlphaF(config.series[i].line_alpha);
       series.line_width = config.series[i].line_width;

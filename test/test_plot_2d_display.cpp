@@ -361,6 +361,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_TRUE(findChild(series, "X Field")->getHidden());
   EXPECT_TRUE(findChild(series, "Y Field")->getHidden());
   EXPECT_NE(nullptr, findChild(series, "Label"));
+  EXPECT_NE(nullptr, findChild(series, "Unit"));
   EXPECT_NE(nullptr, findChild(series, "Color"));
   EXPECT_NE(nullptr, findChild(series, "Line Width"));
   EXPECT_NE(nullptr, findChild(series, "Line Alpha"));
@@ -553,6 +554,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(series, "Y Field")->setValue("pose/pose/position/y");
   findChild(series, "Field")->setValue("pose/pose/position/y");
   findChild(series, "Label")->setValue("Odom Position");
+  findChild(series, "Unit")->setValue("m");
   findChild(series, "Color")->setValue(QColor(255, 80, 20));
   findChild(series, "Line Width")->setValue(3.5);
   findChild(series, "Line Alpha")->setValue(0.45);
@@ -603,6 +605,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.series[0].y_field, "pose/pose/position/y");
   EXPECT_EQ(config.series[0].field, "pose/pose/position/y");
   EXPECT_EQ(config.series[0].label, "Odom Position");
+  EXPECT_EQ(config.series[0].unit, "m");
   EXPECT_EQ(config.series[0].color.red, 255);
   EXPECT_EQ(config.series[0].color.green, 80);
   EXPECT_EQ(config.series[0].color.blue, 20);
@@ -958,6 +961,7 @@ TEST(Plot2DDisplay, KeepsConfiguredSeriesRenderableBeforeTopicResolves)
   findChild(series, "Topic")->setValue("/not_yet");
   findChild(series, "Field")->setValue("data");
   findChild(series, "Label")->setValue("Waiting");
+  findChild(series, "Unit")->setValue("m/s");
   Plot2DDisplayTestAccessor::setTopics(display, TopicTypeMap{});
 
   Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
@@ -966,6 +970,7 @@ TEST(Plot2DDisplay, KeepsConfiguredSeriesRenderableBeforeTopicResolves)
   ASSERT_EQ(renderable.size(), 1U);
   EXPECT_TRUE(renderable[0].enabled);
   EXPECT_EQ(renderable[0].label, "Waiting");
+  EXPECT_EQ(renderable[0].unit, "m/s");
   EXPECT_TRUE(renderable[0].samples.empty());
 }
 

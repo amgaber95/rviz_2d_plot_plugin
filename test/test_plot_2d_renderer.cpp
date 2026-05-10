@@ -292,7 +292,8 @@ TEST(Plot2DRenderer, DrawsSeriesSamples)
     RenderableSeries{
       "Linear X",
       QColor(80, 170, 255),
-      std::vector<PlotSample>{{8.0, 1.0}, {9.0, 2.0}, {10.0, 1.5}}}};
+      std::vector<PlotSample>{{8.0, 1.0}, {9.0, 2.0}, {10.0, 1.5}},
+      ""}};
 
   const QImage image = renderer.render(settings, series);
 
@@ -632,6 +633,38 @@ TEST(Plot2DRenderer, OmitsLatestValuesFromLegendWhenConfigured)
   const QImage without_values = renderer.render(settings, {series});
 
   EXPECT_GT(countDifferentPixels(with_values, without_values), 0);
+}
+
+TEST(Plot2DRenderer, AppendsLegendUnitOnlyWhenLatestValueIsShown)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries series;
+  series.label = "Speed";
+  series.color = QColor(250, 40, 40);
+  series.samples = std::vector<PlotSample>{{10.0, 1.25}};
+  series.unit = "m/s";
+
+  const QImage with_unit = renderer.render(settings, {series});
+  series.unit = "";
+  const QImage without_unit = renderer.render(settings, {series});
+  EXPECT_GT(countDifferentPixels(with_unit, without_unit), 0);
+
+  series.samples.clear();
+  series.unit = "m/s";
+  const QImage waiting_with_unit = renderer.render(settings, {series});
+  series.unit = "";
+  const QImage waiting_without_unit = renderer.render(settings, {series});
+  EXPECT_EQ(countDifferentPixels(waiting_with_unit, waiting_without_unit), 0);
 }
 
 TEST(Plot2DRenderer, AppliesLegendOffsets)

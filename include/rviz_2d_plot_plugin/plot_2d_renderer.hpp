@@ -24,6 +24,7 @@ struct RenderableSeries
   std::string label;
   QColor color{80, 170, 255};
   std::vector<PlotSample> samples;
+  std::string unit;
   bool enabled{true};
   double line_width{2.0};
   LineStyle line_style{LineStyle::Solid};
