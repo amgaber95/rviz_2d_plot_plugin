@@ -409,7 +409,9 @@ void drawLegend(
     return;
   }
 
-  const double line_height = 14.0;
+  const double line_height = std::max(
+    14.0,
+    static_cast<double>(painter.fontMetrics().height()) + 2.0);
   const double legend_width = std::min(rect.width() - 8.0, std::max(72.0, text_width + 24.0));
   const double legend_height = line_height * static_cast<double>(entries.size());
   const bool align_right =
@@ -424,11 +426,15 @@ void drawLegend(
   double y = align_bottom ? rect.bottom() - legend_height - y_offset : rect.top() + y_offset;
 
   for (const LegendEntry & entry : entries) {
+    const double row_center = y + line_height * 0.5;
     painter.setPen(QPen(entry.color, 2.0));
-    painter.drawLine(QPointF(x, y + 7.0), QPointF(x + 16.0, y + 7.0));
+    painter.drawLine(QPointF(x, row_center), QPointF(x + 16.0, row_center));
 
     painter.setPen(QPen(settings.text_color, 1.0));
-    painter.drawText(QRectF(x + 20.0, y, legend_width - 20.0, line_height), entry.text);
+    painter.drawText(
+      QRectF(x + 20.0, y, legend_width - 20.0, line_height),
+      Qt::AlignLeft | Qt::AlignVCenter,
+      entry.text);
     y += line_height;
   }
 }

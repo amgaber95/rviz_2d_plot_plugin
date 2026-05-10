@@ -6,6 +6,8 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QFont>
+#include <QFontMetrics>
 #include <QImage>
 #include <QRect>
 
@@ -696,6 +698,48 @@ TEST(Plot2DRenderer, AppliesLegendOffsets)
   EXPECT_GT(
     countPixelsCloseToInRect(image, QColor(250, 40, 40), QRect(78, 38, 70, 24)),
     0);
+}
+
+TEST(Plot2DRenderer, SpacesLegendRowsFromConfiguredFontMetrics)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 360;
+  settings.height = 180;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.font_size = 16;
+  settings.show_latest_values = false;
+  settings.show_major_grid = false;
+  settings.show_minor_grid = false;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries first;
+  first.label = "First";
+  first.color = QColor(250, 40, 40);
+  RenderableSeries second;
+  second.label = "Second";
+  second.color = QColor(40, 240, 80);
+  RenderableSeries third;
+  third.label = "Third";
+  third.color = QColor(80, 120, 255);
+
+  const QImage image = renderer.render(settings, {first, second, third});
+  const QRect first_bounds = coloredPixelBounds(image, first.color);
+  const QRect second_bounds = coloredPixelBounds(image, second.color);
+  const QRect third_bounds = coloredPixelBounds(image, third.color);
+
+  ASSERT_FALSE(first_bounds.isNull());
+  ASSERT_FALSE(second_bounds.isNull());
+  ASSERT_FALSE(third_bounds.isNull());
+
+  const QFontMetrics metrics(
+    QFont(QStringLiteral("Sans Serif"), std::clamp(settings.font_size, 6, 16)));
+  EXPECT_GE(second_bounds.center().y() - first_bounds.center().y(), metrics.height());
+  EXPECT_GE(third_bounds.center().y() - second_bounds.center().y(), metrics.height());
 }
 
 TEST(Plot2DRenderer, FontSizeChangesTextRendering)
