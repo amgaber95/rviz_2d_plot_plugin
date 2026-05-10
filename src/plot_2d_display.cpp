@@ -1402,11 +1402,15 @@ void Plot2DDisplay::resolveAndSubscribe_()
   const TopicTypeMap topics = topicNamesAndTypes_();
   const Plot2DConfig config = configFromProperties_();
 
-  std::lock_guard<std::mutex> lock(controller_mutex_);
-  controller_.configure(config, topics);
+  Plot2DControllerState state;
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    controller_.configure(config, topics);
+    state = controller_.state();
+  }
+
   subscriptions_.clear();
 
-  const Plot2DControllerState & state = controller_.state();
   std::vector<std::pair<std::string, std::string>> subscription_topics;
   for (const PlotSeriesControllerState & series : state.series) {
     if (series.status == PlotControllerStatus::Ok) {
@@ -1420,12 +1424,12 @@ void Plot2DDisplay::resolveAndSubscribe_()
   }
 
   if (subscription_topics.empty()) {
-    updateStatusFromController_();
+    updateStatusFromController_(state);
     return;
   }
 
   if (!subscription_factory_.create_generic_subscription) {
-    updateStatusFromController_();
+    updateStatusFromController_(state);
     return;
   }
 
@@ -1449,7 +1453,7 @@ void Plot2DDisplay::resolveAndSubscribe_()
     return;
   }
 
-  updateStatusFromController_();
+  updateStatusFromController_(state);
 }
 
 void Plot2DDisplay::onSerializedMessage_(
@@ -1460,11 +1464,13 @@ void Plot2DDisplay::onSerializedMessage_(
     return;
   }
 
+  Plot2DControllerState state;
   {
     std::lock_guard<std::mutex> lock(controller_mutex_);
     controller_.appendSerializedMessage(topic, *message, receiveNowSeconds_());
+    state = controller_.state();
   }
-  updateStatusFromController_();
+  updateStatusFromController_(state);
   if (context_) {
     context_->queueRender();
   }
@@ -1472,16 +1478,40 @@ void Plot2DDisplay::onSerializedMessage_(
 
 void Plot2DDisplay::updateStatusFromController_()
 {
-  const Plot2DControllerState & state = controller_.state();
+  Plot2DControllerState state;
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    state = controller_.state();
+  }
+  updateStatusFromController_(state);
+}
+
+void Plot2DDisplay::updateStatusFromController_(const Plot2DControllerState & state)
+{
   setStatus(
     statusLevel(state.status),
     "Series 1",
     QString::fromStdString(statusText(state)));
 }
 
-PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
+Plot2DDisplay::RenderSnapshot Plot2DDisplay::renderSnapshot_() const
 {
   const Plot2DConfig config = configFromProperties_();
+  Plot2DControllerState state;
+  {
+    std::lock_guard<std::mutex> lock(controller_mutex_);
+    state = controller_.state();
+  }
+  return RenderSnapshot{config, state};
+}
+
+PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
+{
+  return renderSettingsFromConfig_(configFromProperties_());
+}
+
+PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig & config) const
+{
   PlotRenderSettings settings;
   settings.width = config.layout.width;
   settings.height = config.layout.height;
@@ -1530,24 +1560,26 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
 
 std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
 {
-  const Plot2DConfig config = configFromProperties_();
-  std::lock_guard<std::mutex> lock(controller_mutex_);
-  const Plot2DControllerState & state = controller_.state();
+  return renderableSeriesFromSnapshot_(renderSnapshot_());
+}
 
+std::vector<RenderableSeries> Plot2DDisplay::renderableSeriesFromSnapshot_(
+  const RenderSnapshot & snapshot) const
+{
   std::vector<RenderableSeries> output;
-  output.reserve(state.series.size());
-  for (std::size_t i = 0; i < state.series.size(); ++i) {
-    const PlotSeriesControllerState & source = state.series[i];
+  output.reserve(snapshot.controller_state.series.size());
+  for (std::size_t i = 0; i < snapshot.controller_state.series.size(); ++i) {
+    const PlotSeriesControllerState & source = snapshot.controller_state.series[i];
     RenderableSeries series;
     series.label = source.label.empty() ? "Series" : source.label;
-    series.enabled = i < config.series.size() && config.series[i].enabled;
-    if (i < config.series.size()) {
-      series.unit = config.series[i].unit;
-      series.color = toQColor(config.series[i].color);
-      series.color.setAlphaF(config.series[i].line_alpha);
-      series.line_width = config.series[i].line_width;
-      series.line_style = config.series[i].line_style;
-      series.plot_style = config.series[i].plot_style;
+    series.enabled = i < snapshot.config.series.size() && snapshot.config.series[i].enabled;
+    if (i < snapshot.config.series.size()) {
+      series.unit = snapshot.config.series[i].unit;
+      series.color = toQColor(snapshot.config.series[i].color);
+      series.color.setAlphaF(snapshot.config.series[i].line_alpha);
+      series.line_width = snapshot.config.series[i].line_width;
+      series.line_style = snapshot.config.series[i].line_style;
+      series.plot_style = snapshot.config.series[i].plot_style;
     }
     series.samples = source.samples.samples();
     output.push_back(std::move(series));
@@ -1557,8 +1589,12 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeries_() const
 
 std::vector<RenderableReference> Plot2DDisplay::renderableReferences_() const
 {
-  const Plot2DConfig config = configFromProperties_();
+  return renderableReferencesFromConfig_(configFromProperties_());
+}
 
+std::vector<RenderableReference> Plot2DDisplay::renderableReferencesFromConfig_(
+  const Plot2DConfig & config) const
+{
   std::vector<RenderableReference> output;
   output.reserve(config.references.size());
   for (const ReferenceConfig & source : config.references) {
@@ -1577,11 +1613,15 @@ std::vector<RenderableReference> Plot2DDisplay::renderableReferences_() const
 
 void Plot2DDisplay::updateOverlayGeometry_()
 {
+  updateOverlayGeometry_(configFromProperties_());
+}
+
+void Plot2DDisplay::updateOverlayGeometry_(const Plot2DConfig & config)
+{
   if (!overlay_) {
     return;
   }
 
-  const Plot2DConfig config = configFromProperties_();
   overlay_->updateTextureSize(config.layout.width, config.layout.height);
   overlay_->setDimensions(config.layout.width, config.layout.height);
   overlay_->setPosition(
@@ -1597,7 +1637,8 @@ void Plot2DDisplay::renderOverlay_()
     return;
   }
 
-  updateOverlayGeometry_();
+  const RenderSnapshot snapshot = renderSnapshot_();
+  updateOverlayGeometry_(snapshot.config);
   if (isEnabled()) {
     overlay_->show();
   }
@@ -1605,11 +1646,11 @@ void Plot2DDisplay::renderOverlay_()
     return;
   }
 
-  const PlotRenderSettings settings = renderSettingsFromProperties_();
+  const PlotRenderSettings settings = renderSettingsFromConfig_(snapshot.config);
   const QImage rendered = renderer_.render(
     settings,
-    renderableSeries_(),
-    renderableReferences_());
+    renderableSeriesFromSnapshot_(snapshot),
+    renderableReferencesFromConfig_(snapshot.config));
   QColor clear_color(0, 0, 0, 0);
   auto buffer = overlay_->getBuffer();
   QImage target = buffer.getQImage(

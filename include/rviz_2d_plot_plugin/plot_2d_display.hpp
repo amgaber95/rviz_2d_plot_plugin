@@ -141,6 +141,12 @@ private:
     rviz_common::properties::EnumProperty * line_style{nullptr};
   };
 
+  struct RenderSnapshot
+  {
+    Plot2DConfig config;
+    Plot2DControllerState controller_state;
+  };
+
   std::vector<SeriesConfig> seriesConfigFromProperties_() const;
   std::vector<ReferenceConfig> referenceConfigFromProperties_() const;
   Plot2DConfig configFromProperties_() const;
@@ -161,10 +167,18 @@ private:
     const std::string & topic,
     std::shared_ptr<rclcpp::SerializedMessage> message);
   void updateStatusFromController_();
+  void updateStatusFromController_(const Plot2DControllerState & state);
+  RenderSnapshot renderSnapshot_() const;
   PlotRenderSettings renderSettingsFromProperties_() const;
+  PlotRenderSettings renderSettingsFromConfig_(const Plot2DConfig & config) const;
   std::vector<RenderableSeries> renderableSeries_() const;
+  std::vector<RenderableSeries> renderableSeriesFromSnapshot_(
+    const RenderSnapshot & snapshot) const;
   std::vector<RenderableReference> renderableReferences_() const;
+  std::vector<RenderableReference> renderableReferencesFromConfig_(
+    const Plot2DConfig & config) const;
   void updateOverlayGeometry_();
+  void updateOverlayGeometry_(const Plot2DConfig & config);
   void renderOverlay_();
   void unsubscribe_();
   bool shouldRetrySubscriptions_() const;

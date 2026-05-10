@@ -19,6 +19,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -180,9 +181,20 @@ public:
     return display.controller_.state();
   }
 
+  static bool canLockController(Plot2DDisplay & display)
+  {
+    std::unique_lock<std::mutex> lock(display.controller_mutex_, std::try_to_lock);
+    return lock.owns_lock();
+  }
+
   static std::vector<RenderableSeries> renderableSeries(Plot2DDisplay & display)
   {
     return display.renderableSeries_();
+  }
+
+  static auto renderSnapshot(Plot2DDisplay & display)
+  {
+    return display.renderSnapshot_();
   }
 
   static std::vector<std::string> topicOptions(Plot2DDisplay & display)
@@ -952,6 +964,35 @@ TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)
   EXPECT_EQ(state.series[0].type, "std_msgs/msg/Float64");
 }
 
+TEST(Plot2DDisplay, SubscriptionFactoryRunsAfterControllerLockIsReleased)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  bool factory_saw_unlocked_controller = false;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&display, &factory_saw_unlocked_controller](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>)
+    {
+      factory_saw_unlocked_controller = Plot2DDisplayTestAccessor::canLockController(display);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  EXPECT_TRUE(factory_saw_unlocked_controller);
+}
+
 TEST(Plot2DDisplay, KeepsConfiguredSeriesRenderableBeforeTopicResolves)
 {
   ensureQtApplication();
@@ -995,6 +1036,50 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   ASSERT_TRUE(state.series[0].latest_value.has_value());
   EXPECT_DOUBLE_EQ(state.series[0].latest_value.value(), 12.5);
   EXPECT_EQ(state.series[0].samples.size(), 1U);
+}
+
+TEST(Plot2DDisplay, RenderSnapshotCombinesPropertyConfigAndControllerSamples)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  findChild(series, "Label")->setValue("Speed");
+  findChild(series, "Unit")->setValue("m/s");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> callback;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&callback](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> created_callback)
+    {
+      callback = std::move(created_callback);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+  ASSERT_TRUE(callback);
+
+  std_msgs::msg::Float64 message;
+  message.data = 2.75;
+  callback(serializeMessage(message));
+
+  const auto snapshot = Plot2DDisplayTestAccessor::renderSnapshot(display);
+
+  ASSERT_EQ(snapshot.config.series.size(), 1U);
+  EXPECT_EQ(snapshot.config.series[0].topic, "/value");
+  EXPECT_EQ(snapshot.config.series[0].field, "data");
+  EXPECT_EQ(snapshot.config.series[0].label, "Speed");
+  EXPECT_EQ(snapshot.config.series[0].unit, "m/s");
+  ASSERT_EQ(snapshot.controller_state.series.size(), 1U);
+  ASSERT_EQ(snapshot.controller_state.series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(snapshot.controller_state.series[0].samples.samples().front().value, 2.75);
 }
 
 TEST(Plot2DDisplay, HeaderStampRenderWindowUsesNewestSampleTime)
