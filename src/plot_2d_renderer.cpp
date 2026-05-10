@@ -7,6 +7,7 @@
 #include "rviz_2d_plot_plugin/plot_2d_renderer.hpp"
 
 #include <QFont>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -27,13 +28,51 @@ namespace
 constexpr int kMinimumWidth = 120;
 constexpr int kMinimumHeight = 80;
 
-QRectF plotRect(const PlotRenderSettings & settings)
+double majorTickStep(const std::vector<double> & ticks)
 {
+  if (ticks.size() < 2) {
+    return 0.0;
+  }
+  return std::abs(ticks[1] - ticks[0]);
+}
+
+double yAxisLabelWidth(
+  const PlotRenderSettings & settings,
+  const PlotRange & y_range,
+  const QFontMetrics & font_metrics)
+{
+  const std::size_t y_major_count = static_cast<std::size_t>(
+    std::clamp(settings.y_major_tick_count, 2, 20));
+  const TickSet ticks = generateTicks(y_range, y_major_count, 0);
+  const double step = majorTickStep(ticks.major);
+
+  int width = 0;
+  for (const double tick : ticks.major) {
+    width = std::max(
+      width,
+      font_metrics.horizontalAdvance(QString::fromStdString(formatAxisTickValue(tick, step))));
+  }
+  return static_cast<double>(width);
+}
+
+QRectF plotRect(
+  const PlotRenderSettings & settings,
+  const PlotRange & y_range,
+  const QFontMetrics & font_metrics)
+{
+  const double left_margin = std::clamp(
+    yAxisLabelWidth(settings, y_range, font_metrics) + 8.0,
+    26.0,
+    60.0);
+  const double top_margin = std::max(12.0, static_cast<double>(font_metrics.height()));
+  const double right_margin = 12.0;
+  const double bottom_margin = std::max(22.0, static_cast<double>(font_metrics.height()) + 8.0);
+
   return QRectF(
-    42.0,
-    16.0,
-    static_cast<double>(settings.width - 54),
-    static_cast<double>(settings.height - 44));
+    left_margin,
+    top_margin,
+    static_cast<double>(settings.width) - left_margin - right_margin,
+    static_cast<double>(settings.height) - top_margin - bottom_margin);
 }
 
 double clampedRatio(const double value)
@@ -125,14 +164,6 @@ void applyEqualXYScale(
   const double y_span = units_per_pixel * rect.height();
   x_range = PlotRange{x_center - x_span * 0.5, x_center + x_span * 0.5};
   y_range = PlotRange{y_center - y_span * 0.5, y_center + y_span * 0.5};
-}
-
-double majorTickStep(const std::vector<double> & ticks)
-{
-  if (ticks.size() < 2) {
-    return 0.0;
-  }
-  return std::abs(ticks[1] - ticks[0]);
 }
 
 QString formatTimeOffset(const double seconds)
@@ -418,7 +449,6 @@ QImage Plot2DRenderer::render(
     QImage::Format_ARGB32_Premultiplied);
   image.fill(settings.background_color);
 
-  const QRectF rect = plotRect(settings);
   const PlotRange time_range{
     settings.now - settings.window_seconds,
     settings.now};
@@ -426,15 +456,19 @@ QImage Plot2DRenderer::render(
     series, time_range, settings.x_axis_mode);
   PlotRange x_range = xRangeForSettings(settings, samples);
   PlotRange y_range = yRangeForSettings(settings, samples);
-  if (settings.x_axis_mode == XAxisMode::Field &&
-    settings.xy_axis_scale_mode == XYAxisScaleMode::Equal)
-  {
-    applyEqualXYScale(rect, x_range, y_range);
-  }
 
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
   painter.setFont(QFont(QStringLiteral("Sans Serif"), std::clamp(settings.font_size, 6, 16)));
+
+  QRectF rect = plotRect(settings, y_range, painter.fontMetrics());
+  if (settings.x_axis_mode == XAxisMode::Field &&
+    settings.xy_axis_scale_mode == XYAxisScaleMode::Equal)
+  {
+    applyEqualXYScale(rect, x_range, y_range);
+    rect = plotRect(settings, y_range, painter.fontMetrics());
+  }
+
   drawGrid(painter, rect, x_range, y_range, settings);
   drawReferences(painter, rect, y_range, references, settings);
   for (const RenderableSeries & item : series) {

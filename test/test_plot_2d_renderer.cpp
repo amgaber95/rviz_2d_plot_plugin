@@ -138,6 +138,18 @@ QRect coloredPixelBounds(const QImage & image, const QColor & target)
   return bounds;
 }
 
+int firstColumnDifferentFrom(const QImage & image, const QColor & background)
+{
+  for (int x = 0; x < image.width(); ++x) {
+    for (int y = 0; y < image.height(); ++y) {
+      if (image.pixelColor(x, y) != background) {
+        return x;
+      }
+    }
+  }
+  return -1;
+}
+
 RenderableSeries horizontalSeries()
 {
   RenderableSeries series;
@@ -177,6 +189,46 @@ TEST(Plot2DRenderer, RendersNonEmptyImageWithGridAndAxes)
   const QImage image = renderer.render(settings, {});
 
   EXPECT_TRUE(hasDifferentPixel(image, settings.background_color));
+}
+
+TEST(Plot2DRenderer, UsesCompactLeftGutterForShortYAxisLabels)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.show_legend = false;
+  settings.show_major_grid = false;
+  settings.show_minor_grid = false;
+  settings.text_color = QColor(255, 255, 255, 0);
+
+  const QImage image = renderer.render(settings, {});
+
+  EXPECT_LT(firstColumnDifferentFrom(image, settings.background_color), 36);
+}
+
+TEST(Plot2DRenderer, KeepsWiderLeftGutterForLongYAxisLabels)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1000.0;
+  settings.fixed_y_max = 1000.0;
+  settings.show_legend = false;
+  settings.show_major_grid = false;
+  settings.show_minor_grid = false;
+  settings.text_color = QColor(255, 255, 255, 0);
+
+  const QImage image = renderer.render(settings, {});
+
+  EXPECT_GE(firstColumnDifferentFrom(image, settings.background_color), 36);
 }
 
 TEST(Plot2DRenderer, MinorGridAddsSubtleIntermediateLines)
