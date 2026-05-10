@@ -498,7 +498,17 @@ void addLegendPositionOptions(rviz_common::properties::EnumProperty * property)
 }
 
 constexpr const char * kNoReferencePreset = "None";
+constexpr const char * kNoReferenceAction = "None";
 constexpr int kReferenceFixedPropertyCount = 5;
+
+void addReferenceActionOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(kNoReferenceAction);
+  property->addOptionStd("Delete");
+}
 
 void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
 {
@@ -985,6 +995,57 @@ void Plot2DDisplay::onReferenceCountChanged()
   onConfigPropertyChanged();
 }
 
+void Plot2DDisplay::onReferenceActionChanged()
+{
+  auto * action_property =
+    qobject_cast<rviz_common::properties::EnumProperty *>(sender());
+  if (!action_property) {
+    return;
+  }
+
+  const auto property_it = std::find_if(
+    reference_properties_.begin(), reference_properties_.end(),
+    [action_property](const ReferencePropertySet & properties) {
+      return properties.action == action_property;
+    });
+  if (property_it == reference_properties_.end()) {
+    return;
+  }
+
+  const std::string action = action_property->getStdString();
+  if (action == kNoReferenceAction) {
+    return;
+  }
+
+  std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
+  const std::size_t index = static_cast<std::size_t>(
+    std::distance(reference_properties_.begin(), property_it));
+  bool changed = false;
+
+  if (action == "Delete" && index < references.size()) {
+    references.erase(references.begin() + static_cast<std::ptrdiff_t>(index));
+    changed = true;
+  }
+
+  if (!changed) {
+    const QSignalBlocker blocker(action_property);
+    action_property->setValue(kNoReferenceAction);
+    return;
+  }
+
+  QTimer::singleShot(
+    0,
+    this,
+    [this, references = std::move(references)]() mutable {
+      {
+        const QSignalBlocker blocker(reference_count_property_);
+        reference_count_property_->setInt(static_cast<int>(references.size()));
+      }
+      rebuildReferenceProperties_(static_cast<int>(references.size()), references);
+      onConfigPropertyChanged();
+    });
+}
+
 void Plot2DDisplay::onClearHistoryChanged()
 {
   if (!clear_history_property_ || !clear_history_property_->getBool()) {
@@ -1264,6 +1325,10 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     const QString name = "Reference " + QString::number(i + 1);
     properties.root = new ChildOnlyGroupProperty(
       name, QVariant(), "Horizontal reference line.", references_root_property_);
+    properties.action = new rviz_common::properties::EnumProperty(
+      "Action", kNoReferenceAction, "Delete this reference.",
+      properties.root, SLOT(onReferenceActionChanged()), this);
+    addReferenceActionOptions(properties.action);
     properties.enabled = new rviz_common::properties::BoolProperty(
       "Enabled", value.enabled, "Enable this reference line.", properties.root,
       SLOT(onConfigPropertyChanged()), this);

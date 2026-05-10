@@ -80,6 +80,7 @@ private Q_SLOTS:
   void onSeriesActionChanged();
   void onApplyReferencePresetChanged();
   void onReferenceCountChanged();
+  void onReferenceActionChanged();
   void onClearHistoryChanged();
   void onTopicOptionsRequested(
     rviz_common::properties::EditableEnumProperty * property);
@@ -132,6 +133,7 @@ private:
   struct ReferencePropertySet
   {
     rviz_common::properties::Property * root{nullptr};
+    rviz_common::properties::EnumProperty * action{nullptr};
     rviz_common::properties::BoolProperty * enabled{nullptr};
     rviz_common::properties::FloatProperty * value{nullptr};
     rviz_common::properties::FloatProperty * tolerance{nullptr};

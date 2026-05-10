@@ -712,6 +712,39 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
 }
 
+TEST(Plot2DDisplay, ReferenceActionDeletesReference)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(display);
+  auto * reference_count = findChild(references_root, "Reference Count");
+  ASSERT_NE(nullptr, reference_count);
+
+  reference_count->setValue(2);
+  auto * reference_1 = findChild(references_root, "Reference 1");
+  auto * reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  findChild(reference_1, "Value")->setValue(0.25);
+  findChild(reference_1, "Label")->setValue("First");
+  findChild(reference_2, "Value")->setValue(0.75);
+  findChild(reference_2, "Tolerance")->setValue(0.1);
+  findChild(reference_2, "Label")->setValue("Second");
+
+  auto * action = findChild(reference_1, "Action");
+  ASSERT_NE(nullptr, action);
+  action->setValue("Delete");
+  processQtEvents();
+
+  EXPECT_EQ(reference_count->getValue().toInt(), 1);
+  reference_1 = findChild(references_root, "Reference 1");
+  ASSERT_NE(nullptr, reference_1);
+  EXPECT_DOUBLE_EQ(findChild(reference_1, "Value")->getValue().toDouble(), 0.75);
+  EXPECT_NEAR(findChild(reference_1, "Tolerance")->getValue().toDouble(), 0.1, 1e-6);
+  EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "Second");
+  EXPECT_EQ(nullptr, findChild(references_root, "Reference 2"));
+}
+
 TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
 {
   ensureQtApplication();
