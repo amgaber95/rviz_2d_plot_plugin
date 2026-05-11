@@ -704,7 +704,7 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
   EXPECT_EQ(preset->getValue().toString(), "Tolerance Band");
 
-  preset->setValue("Symmetric Limits");
+  preset->setValue("Unknown Preset");
   apply_preset->setValue(true);
 
   EXPECT_FALSE(apply_preset->getValue().toBool());

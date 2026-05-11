@@ -702,7 +702,7 @@ Plot2DDisplay::Plot2DDisplay()
     references_root_property_);
   reference_preset_tolerance_property_ = new rviz_common::properties::FloatProperty(
     "Preset Tolerance", 0.1F,
-    "Half-width used by tolerance and symmetric limit presets.",
+    "Half-width used by the tolerance band preset.",
     references_root_property_);
   reference_preset_tolerance_property_->setMin(0.0F);
   apply_reference_preset_property_ = new rviz_common::properties::BoolProperty(
