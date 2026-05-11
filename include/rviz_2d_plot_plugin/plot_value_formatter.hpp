@@ -12,7 +12,10 @@
 namespace rviz_2d_plot_plugin
 {
 
+/// Format a latest/legend value without unnecessary trailing decimals.
 std::string formatPlotValue(double value);
+
+/// Format an axis tick using precision implied by the tick step.
 std::string formatAxisTickValue(double value, double step);
 
 }  // namespace rviz_2d_plot_plugin

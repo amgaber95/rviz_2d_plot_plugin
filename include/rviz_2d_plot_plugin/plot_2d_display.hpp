@@ -54,6 +54,7 @@ namespace rviz_2d_plot_plugin
 
 class Plot2DDisplayTestAccessor;
 
+/// RViz display that manages properties, ROS subscriptions, and plot overlays.
 class Plot2DDisplay : public rviz_common::Display
 {
   Q_OBJECT

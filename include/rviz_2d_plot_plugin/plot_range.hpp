@@ -14,6 +14,7 @@
 namespace rviz_2d_plot_plugin
 {
 
+/// Numeric axis range with basic validity helpers.
 struct PlotRange
 {
   double min{-1.0};
@@ -23,7 +24,10 @@ struct PlotRange
   bool isValid() const;
 };
 
+/// Build a fixed range, repairing invalid limits with a fallback span.
 PlotRange makeFixedRange(double min, double max, double fallback_span = 1.0);
+
+/// Build an auto range from visible samples and padding.
 PlotRange makeAutoRange(
   const std::vector<PlotSample> & samples,
   double padding_fraction,

@@ -15,13 +15,17 @@
 namespace rviz_2d_plot_plugin
 {
 
+/// Major and minor tick values for one axis.
 struct TickSet
 {
   std::vector<double> major;
   std::vector<double> minor;
 };
 
+/// Round a raw tick interval to a readable 1/2/5 step.
 double niceTickStep(double raw_step);
+
+/// Generate readable major and minor ticks inside a range.
 TickSet generateTicks(
   PlotRange range,
   std::size_t target_major_count,

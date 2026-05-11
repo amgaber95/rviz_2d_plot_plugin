@@ -36,6 +36,7 @@ enum class PlotControllerStatus
   ExtractionError,
 };
 
+/// Runtime state for one configured series after topic and field resolution.
 struct PlotSeriesControllerState
 {
   PlotControllerStatus status{PlotControllerStatus::EmptySelection};
@@ -47,6 +48,7 @@ struct PlotSeriesControllerState
   std::optional<double> latest_value;
 };
 
+/// Runtime state snapshot used by the RViz display and renderer bridge.
 struct Plot2DControllerState
 {
   PlotControllerStatus status{PlotControllerStatus::EmptySelection};
@@ -54,24 +56,29 @@ struct Plot2DControllerState
   std::vector<PlotSeriesControllerState> series;
 };
 
+/// Extractors for std_msgs/Header stamp fields when header time is enabled.
 struct HeaderStampExtractor
 {
   std::unique_ptr<GenericFieldExtractor> sec;
   std::unique_ptr<GenericFieldExtractor> nanosec;
 };
 
+/// Resolves configured fields, owns extractors, and stores plot samples.
 class Plot2DController
 {
 public:
+  /// Rebuild subscriptions and extractors from a new display configuration.
   void configure(
     Plot2DConfig config,
     const TopicTypeMap & topics);
 
+  /// Extract matching series samples from a serialized ROS message.
   bool appendSerializedMessage(
     const std::string & topic,
     const rclcpp::SerializedMessage & serialized,
     double receive_time);
 
+  /// Drop all retained samples without changing resolved series configuration.
   void clearHistory();
 
   const Plot2DConfig & config() const;

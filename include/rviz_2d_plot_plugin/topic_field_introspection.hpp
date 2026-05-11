@@ -27,6 +27,7 @@ enum class FieldExtractionStatus
   UnsupportedField
 };
 
+/// Result of extracting one numeric scalar from a serialized ROS message.
 struct FieldExtractionResult
 {
   FieldExtractionStatus status{FieldExtractionStatus::TypeSupportError};
@@ -34,12 +35,14 @@ struct FieldExtractionResult
   std::string message;
 };
 
+/// Discoverable numeric scalar field paths for a message type.
 struct FieldPathOptions
 {
   std::vector<std::string> paths;
   std::string error;
 };
 
+/// Runtime introspection extractor for one message type and field path.
 class GenericFieldExtractor
 {
 public:
@@ -56,6 +59,7 @@ public:
 
   bool ready() const;
   const std::string & error() const;
+  /// Deserialize the message and read the configured numeric field.
   FieldExtractionResult extract(
     const rclcpp::SerializedMessage & serialized) const;
 
@@ -64,6 +68,7 @@ private:
   std::unique_ptr<Impl> impl_;
 };
 
+/// List numeric and boolean scalar field paths for an introspectable type.
 FieldPathOptions numericScalarFieldPathsForType(
   const std::string & message_type,
   std::size_t max_depth = 8);

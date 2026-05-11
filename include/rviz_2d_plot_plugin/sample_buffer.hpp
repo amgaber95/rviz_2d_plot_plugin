@@ -14,6 +14,7 @@
 namespace rviz_2d_plot_plugin
 {
 
+/// One plotted sample with receive/header time, x-coordinate, and y-value.
 struct PlotSample
 {
   double time{0.0};
@@ -25,16 +26,20 @@ struct PlotSample
   PlotSample(double sample_time, double sample_x, double sample_value);
 };
 
+/// Inclusive numeric range for samples or axis limits.
 struct ValueRange
 {
   double min{0.0};
   double max{0.0};
 };
 
+/// Append-only sample storage with pruning and value-transform helpers.
 class RollingSampleBuffer
 {
 public:
+  /// Append a time-series sample whose x-coordinate is time.
   void append(double time, double value);
+  /// Append an XY sample with explicit x-coordinate.
   void append(double time, double x, double value);
   void pruneBefore(double minimum_time);
   void pruneToWindow(double latest_time, double window_seconds);

@@ -14,6 +14,7 @@
 namespace rviz_2d_plot_plugin
 {
 
+/// ROS topic names mapped to the message types currently advertised for them.
 using TopicTypeMap = std::map<std::string, std::vector<std::string>>;
 
 enum class PlotPathStatus
@@ -27,6 +28,7 @@ enum class PlotPathStatus
   AmbiguousTopicType,
 };
 
+/// Parsed topic, type, and field path for a plot source string.
 struct PlotPathResolution
 {
   PlotPathStatus status{PlotPathStatus::EmptyPath};
@@ -36,12 +38,15 @@ struct PlotPathResolution
   std::string message;
 };
 
+/// Split a slash-delimited message field path into member names.
 std::vector<std::string> splitFieldPath(const std::string & field_path);
 
+/// Resolve a combined path such as /topic/nested/value against visible topics.
 PlotPathResolution resolvePlotPath(
   const std::string & raw_path,
   const TopicTypeMap & topics);
 
+/// Resolve an explicit topic plus field path against visible topics.
 PlotPathResolution resolveTopicFieldPath(
   const std::string & topic,
   const std::string & field_path,

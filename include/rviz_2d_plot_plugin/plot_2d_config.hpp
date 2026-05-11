@@ -78,6 +78,7 @@ enum class VerticalAlignment
   Bottom,
 };
 
+/// Y-axis range and padding settings.
 struct AxisConfig
 {
   AxisScaleMode scale_mode{AxisScaleMode::Auto};
@@ -89,6 +90,7 @@ struct AxisConfig
   void repairFixedRange(double fallback_span = 1.0);
 };
 
+/// X-axis range, source, and XY aspect settings.
 struct XAxisConfig
 {
   XAxisMode mode{XAxisMode::Time};
@@ -102,6 +104,7 @@ struct XAxisConfig
   void repairFixedRange(double fallback_span = 1.0);
 };
 
+/// Time window and sample timestamp policy for rolling plots.
 struct TimeConfig
 {
   double window_seconds{30.0};
@@ -113,6 +116,7 @@ struct TimeConfig
   void repair();
 };
 
+/// Overlay size and screen placement settings.
 struct LayoutConfig
 {
   int width{360};
@@ -125,6 +129,7 @@ struct LayoutConfig
   void repair();
 };
 
+/// RGB color stored without a Qt dependency.
 struct SeriesColor
 {
   int red{80};
@@ -134,6 +139,7 @@ struct SeriesColor
   void repair();
 };
 
+/// User configuration for one plotted numeric field.
 struct SeriesConfig
 {
   bool enabled{true};
@@ -154,6 +160,7 @@ struct SeriesConfig
   void repair();
 };
 
+/// User configuration for one horizontal reference line or tolerance band.
 struct ReferenceConfig
 {
   bool enabled{true};
@@ -168,6 +175,7 @@ struct ReferenceConfig
   void repair();
 };
 
+/// Complete display configuration assembled from RViz properties.
 struct Plot2DConfig
 {
   std::vector<SeriesConfig> series{SeriesConfig{}};

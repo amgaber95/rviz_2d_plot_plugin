@@ -19,6 +19,7 @@
 namespace rviz_2d_plot_plugin
 {
 
+/// Renderer-ready series data copied from controller state and style config.
 struct RenderableSeries
 {
   std::string label;
@@ -31,6 +32,7 @@ struct RenderableSeries
   PlotStyle plot_style{PlotStyle::Line};
 };
 
+/// Renderer-ready horizontal reference line, optionally with tolerance band.
 struct RenderableReference
 {
   std::string label;
@@ -50,6 +52,7 @@ enum class LegendPosition
   BottomRight
 };
 
+/// Plot image settings independent of RViz property objects.
 struct PlotRenderSettings
 {
   int width{360};
@@ -83,9 +86,11 @@ struct PlotRenderSettings
   int minor_grid_divisions{1};
 };
 
+/// Draws plot images into a Qt image for the RViz overlay texture.
 class Plot2DRenderer
 {
 public:
+  /// Render the configured plot, series, and references into an ARGB image.
   QImage render(
     PlotRenderSettings settings,
     const std::vector<RenderableSeries> & series,
