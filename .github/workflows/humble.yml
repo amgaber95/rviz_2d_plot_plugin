@@ -1,0 +1,39 @@
+name: Humble CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test on ROS 2 Humble
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:jammy
+
+    steps:
+      - name: Set up ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build and test package
+        id: action_ros_ci
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: rviz_2d_plot_plugin
+          target-ros2-distro: humble
+          coverage-result: false
+
+      - name: Upload colcon logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: humble-colcon-logs
+          path: ${{ steps.action_ros_ci.outputs.ros-workspace-directory-name }}/log
