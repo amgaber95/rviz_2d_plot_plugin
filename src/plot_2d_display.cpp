@@ -471,20 +471,6 @@ OverlayVerticalAlignment toOverlayVerticalAlignment(
   return OverlayVerticalAlignment::Top;
 }
 
-constexpr const char * kNoSeriesAction = "None";
-
-void addSeriesActionOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(kNoSeriesAction);
-  property->addOptionStd("Duplicate");
-  property->addOptionStd("Delete");
-  property->addOptionStd("Move Up");
-  property->addOptionStd("Move Down");
-}
-
 std::string legendPositionName(const LegendPosition position)
 {
   switch (position) {
@@ -941,54 +927,73 @@ void Plot2DDisplay::onSeriesCountChanged()
   onConfigPropertyChanged();
 }
 
-void Plot2DDisplay::onSeriesActionChanged()
+void Plot2DDisplay::onDuplicateSeriesChanged()
 {
-  auto * action_property =
-    qobject_cast<rviz_common::properties::EnumProperty *>(sender());
-  if (!action_property) {
+  auto * duplicate_property =
+    qobject_cast<rviz_common::properties::BoolProperty *>(sender());
+  if (!duplicate_property || !duplicate_property->getBool()) {
     return;
   }
 
   const auto property_it = std::find_if(
     series_properties_.begin(), series_properties_.end(),
-    [action_property](const SeriesPropertySet & properties) {
-      return properties.action == action_property;
+    [duplicate_property](const SeriesPropertySet & properties) {
+      return properties.duplicate == duplicate_property;
     });
   if (property_it == series_properties_.end()) {
-    return;
-  }
-
-  const std::string action = action_property->getStdString();
-  if (action == kNoSeriesAction) {
     return;
   }
 
   std::vector<SeriesConfig> series = seriesConfigFromProperties_();
   const std::size_t index = static_cast<std::size_t>(
     std::distance(series_properties_.begin(), property_it));
-  bool changed = false;
 
-  if (action == "Duplicate" && index < series.size() && series.size() < 12U) {
-    SeriesConfig copy = series[index];
-    copy.label = copy.label.empty() ? "Series Copy" : copy.label + " Copy";
-    series.insert(series.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
-    changed = true;
-  } else if (action == "Delete" && index < series.size() && series.size() > 1U) {
-    series.erase(series.begin() + static_cast<std::ptrdiff_t>(index));
-    changed = true;
-  } else if (action == "Move Up" && index > 0U && index < series.size()) {
-    std::swap(series[index - 1U], series[index]);
-    changed = true;
-  } else if (action == "Move Down" && index + 1U < series.size()) {
-    std::swap(series[index], series[index + 1U]);
-    changed = true;
-  }
-
-  if (!changed) {
-    const QSignalBlocker blocker(action_property);
-    action_property->setValue(kNoSeriesAction);
+  if (index >= series.size() || series.size() >= 12U) {
+    const QSignalBlocker blocker(duplicate_property);
+    duplicate_property->setBool(false);
     return;
   }
+
+  SeriesConfig copy = series[index];
+  copy.label = copy.label.empty() ? "Series Copy" : copy.label + " Copy";
+  series.insert(series.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
+
+  QTimer::singleShot(
+    0,
+    this,
+    [this, series = std::move(series)]() mutable {
+      replaceSeriesProperties_(series);
+      onConfigPropertyChanged();
+    });
+}
+
+void Plot2DDisplay::onDeleteSeriesChanged()
+{
+  auto * delete_property =
+    qobject_cast<rviz_common::properties::BoolProperty *>(sender());
+  if (!delete_property || !delete_property->getBool()) {
+    return;
+  }
+
+  const auto property_it = std::find_if(
+    series_properties_.begin(), series_properties_.end(),
+    [delete_property](const SeriesPropertySet & properties) {
+      return properties.delete_series == delete_property;
+    });
+  if (property_it == series_properties_.end()) {
+    return;
+  }
+
+  std::vector<SeriesConfig> series = seriesConfigFromProperties_();
+  const std::size_t index = static_cast<std::size_t>(
+    std::distance(series_properties_.begin(), property_it));
+  if (index >= series.size() || series.size() <= 1U) {
+    const QSignalBlocker blocker(delete_property);
+    delete_property->setBool(false);
+    return;
+  }
+
+  series.erase(series.begin() + static_cast<std::ptrdiff_t>(index));
 
   QTimer::singleShot(
     0,
@@ -1239,10 +1244,14 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     properties.root = new SeriesRootProperty(
       name, value.enabled, "Enable this plotted topic field.", series_root_property_,
       SLOT(onConfigPropertyChanged()), this);
-    properties.action = new rviz_common::properties::EnumProperty(
-      "Action", kNoSeriesAction, "Duplicate, delete, or reorder this series.",
-      properties.root, SLOT(onSeriesActionChanged()), this);
-    addSeriesActionOptions(properties.action);
+    properties.duplicate = new rviz_common::properties::BoolProperty(
+      "Duplicate", false, "Duplicate this series.",
+      properties.root, SLOT(onDuplicateSeriesChanged()), this);
+    properties.duplicate->setShouldBeSaved(false);
+    properties.delete_series = new rviz_common::properties::BoolProperty(
+      "Delete", false, "Delete this series.",
+      properties.root, SLOT(onDeleteSeriesChanged()), this);
+    properties.delete_series->setShouldBeSaved(false);
     properties.topic = new ContainsFilterEditableEnumProperty(
       "Topic", QString::fromStdString(value.topic), "ROS 2 topic to subscribe to.",
       properties.root, SLOT(onConfigPropertyChanged()), this);

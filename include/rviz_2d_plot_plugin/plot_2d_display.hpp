@@ -69,7 +69,8 @@ private Q_SLOTS:
   void onRenderPropertyChanged();
   void onPlotModeChanged();
   void onSeriesCountChanged();
-  void onSeriesActionChanged();
+  void onDuplicateSeriesChanged();
+  void onDeleteSeriesChanged();
   void onApplyReferencePresetChanged();
   void onReferenceCountChanged();
   void onReferenceActionChanged();
@@ -100,7 +101,8 @@ private:
   struct SeriesPropertySet
   {
     rviz_common::properties::BoolProperty * root{nullptr};
-    rviz_common::properties::EnumProperty * action{nullptr};
+    rviz_common::properties::BoolProperty * duplicate{nullptr};
+    rviz_common::properties::BoolProperty * delete_series{nullptr};
     rviz_common::properties::EditableEnumProperty * topic{nullptr};
     rviz_common::properties::EditableEnumProperty * x_field{nullptr};
     rviz_common::properties::EditableEnumProperty * y_field{nullptr};

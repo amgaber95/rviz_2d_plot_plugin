@@ -424,7 +424,9 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count"));
   EXPECT_TRUE(series->getValue().canConvert<bool>());
   EXPECT_EQ(nullptr, findChild(series, "Enabled"));
-  EXPECT_NE(nullptr, findChild(series, "Action"));
+  EXPECT_EQ(nullptr, findChild(series, "Action"));
+  EXPECT_NE(nullptr, findChild(series, "Duplicate"));
+  EXPECT_NE(nullptr, findChild(series, "Delete"));
   EXPECT_NE(nullptr, findChild(series, "Topic"));
   EXPECT_NE(nullptr, findChild(series, "X Field"));
   EXPECT_NE(nullptr, findChild(series, "Y Field"));
@@ -673,6 +675,8 @@ TEST(Plot2DDisplay, BooleanPropertiesUseCheckboxEditing)
     Plot2DDisplayTestAccessor::pausePlot(display),
     Plot2DDisplayTestAccessor::clearHistory(display),
     series,
+    findChild(series, "Duplicate"),
+    findChild(series, "Delete"),
     findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Major Grid"),
@@ -979,7 +983,7 @@ TEST(Plot2DDisplay, AssignsDistinctDefaultColorsToNewSeries)
   EXPECT_NE(color_2->getColor(), color_3->getColor());
 }
 
-TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
+TEST(Plot2DDisplay, SeriesCommandCheckboxesDuplicateAndDeleteSeries)
 {
   ensureQtApplication();
   Plot2DDisplay display;
@@ -997,9 +1001,11 @@ TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
   findChild(series_1, "Field")->setValue("data");
   findChild(series_2, "Label")->setValue("Second");
 
-  auto * action = findChild(series_1, "Action");
-  ASSERT_NE(nullptr, action);
-  action->setValue("Duplicate");
+  ASSERT_EQ(nullptr, findChild(series_1, "Action"));
+  auto * duplicate = findChild(series_1, "Duplicate");
+  ASSERT_NE(nullptr, duplicate);
+  EXPECT_FALSE(duplicate->shouldBeSaved());
+  duplicate->setValue(true);
   processQtEvents();
 
   EXPECT_EQ(series_count->getValue().toInt(), 3);
@@ -1011,20 +1017,10 @@ TEST(Plot2DDisplay, SeriesActionDuplicatesDeletesAndReordersSeries)
   EXPECT_EQ(findChild(series_2, "Topic")->getValue().toString(), "/first");
   EXPECT_EQ(findChild(series_3, "Label")->getValue().toString(), "Second");
 
-  action = findChild(series_3, "Action");
-  ASSERT_NE(nullptr, action);
-  action->setValue("Move Up");
-  processQtEvents();
-  series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
-  series_3 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3");
-  ASSERT_NE(nullptr, series_2);
-  ASSERT_NE(nullptr, series_3);
-  EXPECT_EQ(findChild(series_2, "Label")->getValue().toString(), "Second");
-  EXPECT_EQ(findChild(series_3, "Label")->getValue().toString(), "First Copy");
-
-  action = findChild(series_3, "Action");
-  ASSERT_NE(nullptr, action);
-  action->setValue("Delete");
+  auto * delete_series = findChild(series_3, "Delete");
+  ASSERT_NE(nullptr, delete_series);
+  EXPECT_FALSE(delete_series->shouldBeSaved());
+  delete_series->setValue(true);
   processQtEvents();
 
   EXPECT_EQ(series_count->getValue().toInt(), 2);
