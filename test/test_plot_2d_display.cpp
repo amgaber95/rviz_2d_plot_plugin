@@ -535,7 +535,7 @@ TEST(Plot2DDisplay, PlotModeSwitchesBetweenTimeAndXYSeriesFields)
   EXPECT_FALSE(xy_history_mode->getHidden());
 }
 
-TEST(Plot2DDisplay, SeriesRootKeepsEnabledValueWhenSourceChanges)
+TEST(Plot2DDisplay, SeriesRootShowsConfiguredSourceForPlotMode)
 {
   ensureQtApplication();
   Plot2DDisplay display;
@@ -543,6 +543,7 @@ TEST(Plot2DDisplay, SeriesRootKeepsEnabledValueWhenSourceChanges)
   ASSERT_NE(nullptr, series);
 
   EXPECT_EQ(series->getName(), "Series 1");
+  EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "Series 1");
   EXPECT_TRUE(series->getValue().toBool());
 
   findChild(series, "Topic")->setValue("/cmd_vel");
@@ -550,10 +551,12 @@ TEST(Plot2DDisplay, SeriesRootKeepsEnabledValueWhenSourceChanges)
 
   EXPECT_EQ(series->getName(), "Series 1");
   EXPECT_TRUE(series->getValue().toBool());
+  EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "/cmd_vel/linear/x");
 
   findChild(&display, "Plot Mode")->setValue("XY");
 
   EXPECT_TRUE(series->getValue().toBool());
+  EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "/cmd_vel");
 }
 
 TEST(Plot2DDisplay, InitializesInjectedOverlayBackend)
@@ -1186,6 +1189,23 @@ TEST(Plot2DDisplay, KeepsConfiguredSeriesRenderableBeforeTopicResolves)
   EXPECT_EQ(renderable[0].label, "Waiting");
   EXPECT_EQ(renderable[0].unit, "m/s");
   EXPECT_TRUE(renderable[0].samples.empty());
+}
+
+TEST(Plot2DDisplay, UsesSourcePathAsDefaultRenderableSeriesLabel)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+
+  findChild(series, "Topic")->setValue("/cmd_vel");
+  findChild(series, "Field")->setValue("linear/x");
+  findChild(series, "Label")->setValue("");
+
+  const auto renderable = Plot2DDisplayTestAccessor::renderableSeries(display);
+
+  ASSERT_EQ(renderable.size(), 1U);
+  EXPECT_EQ(renderable[0].label, "/cmd_vel/linear/x");
 }
 
 TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)

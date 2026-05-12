@@ -35,6 +35,7 @@
 #include <rviz_common/properties/float_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
 #include <rviz_common/properties/property.hpp>
+#include <rviz_common/properties/property_tree_model.hpp>
 #include <rviz_common/properties/status_property.hpp>
 #include <rviz_common/properties/string_property.hpp>
 
@@ -87,6 +88,34 @@ public:
       }
     }
   }
+};
+
+class SeriesRootProperty : public rviz_common::properties::BoolProperty
+{
+public:
+  using rviz_common::properties::BoolProperty::BoolProperty;
+
+  void setDisplayLabel(const QString & label)
+  {
+    if (display_label_ == label) {
+      return;
+    }
+    display_label_ = label;
+    if (model_) {
+      model_->emitDataChanged(this);
+    }
+  }
+
+  QVariant getViewData(const int column, const int role) const override
+  {
+    if (column == 0 && role == Qt::DisplayRole && !display_label_.isEmpty()) {
+      return display_label_;
+    }
+    return rviz_common::properties::BoolProperty::getViewData(column, role);
+  }
+
+private:
+  QString display_label_;
 };
 
 rviz_common::properties::StatusProperty::Level statusLevel(
@@ -266,6 +295,19 @@ PlotMode plotModeFromName(const std::string & name)
     return PlotMode::XY;
   }
   return PlotMode::TimeSeries;
+}
+
+std::string seriesDefaultLabel(const SeriesConfig & series, const PlotMode plot_mode)
+{
+  if (series.topic.empty()) {
+    return {};
+  }
+  if (plot_mode == PlotMode::XY || series.field.empty()) {
+    return series.topic;
+  }
+
+  const std::string separator = series.field.front() == '/' ? "" : "/";
+  return series.topic + separator + series.field;
 }
 
 void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
@@ -1183,14 +1225,18 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     SeriesConfig value;
     if (static_cast<std::size_t>(i) < values.size()) {
       value = values[static_cast<std::size_t>(i)];
+      if (value.label == "Series" && value.topic.empty() && value.field.empty() &&
+        value.x_field.empty() && value.y_field.empty())
+      {
+        value.label.clear();
+      }
     } else {
-      value.label = "Series " + std::to_string(i + 1);
       value.color = defaultSeriesColor(static_cast<std::size_t>(i));
     }
 
     SeriesPropertySet properties;
     const QString name = "Series " + QString::number(i + 1);
-    properties.root = new rviz_common::properties::BoolProperty(
+    properties.root = new SeriesRootProperty(
       name, value.enabled, "Enable this plotted topic field.", series_root_property_,
       SLOT(onConfigPropertyChanged()), this);
     properties.action = new rviz_common::properties::EnumProperty(
@@ -1396,6 +1442,21 @@ void Plot2DDisplay::updateModePropertyVisibility_()
 
 void Plot2DDisplay::updateSeriesPropertySummaries_()
 {
+  const PlotMode plot_mode = plot_mode_property_ ?
+    plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
+  const std::vector<SeriesConfig> series = seriesConfigFromProperties_();
+  for (std::size_t i = 0; i < series_properties_.size() && i < series.size(); ++i) {
+    auto * root = dynamic_cast<SeriesRootProperty *>(series_properties_[i].root);
+    if (!root) {
+      continue;
+    }
+
+    QString label = QString::fromStdString(seriesDefaultLabel(series[i], plot_mode));
+    if (label.isEmpty()) {
+      label = "Series " + QString::number(static_cast<int>(i) + 1);
+    }
+    root->setDisplayLabel(label);
+  }
 }
 
 const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField_(
@@ -1583,15 +1644,22 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeriesFromSnapshot_(
   for (std::size_t i = 0; i < snapshot.controller_state.series.size(); ++i) {
     const PlotSeriesControllerState & source = snapshot.controller_state.series[i];
     RenderableSeries series;
-    series.label = source.label.empty() ? "Series" : source.label;
     series.enabled = i < snapshot.config.series.size() && snapshot.config.series[i].enabled;
     if (i < snapshot.config.series.size()) {
+      series.label = source.label.empty() ?
+        seriesDefaultLabel(snapshot.config.series[i], snapshot.config.plot_mode) :
+        source.label;
+      if (series.label.empty()) {
+        series.label = "Series";
+      }
       series.unit = snapshot.config.series[i].unit;
       series.color = toQColor(snapshot.config.series[i].color);
       series.color.setAlphaF(snapshot.config.series[i].line_alpha);
       series.line_width = snapshot.config.series[i].line_width;
       series.line_style = snapshot.config.series[i].line_style;
       series.plot_style = snapshot.config.series[i].plot_style;
+    } else {
+      series.label = source.label.empty() ? "Series" : source.label;
     }
     series.samples = source.samples.samples();
     output.push_back(std::move(series));
