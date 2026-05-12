@@ -566,6 +566,28 @@ TEST(Plot2DDisplay, SeriesRootShowsConfiguredSourceForPlotMode)
   EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "Linear X");
 }
 
+TEST(Plot2DDisplay, NewSeriesRowsUseSourceFallbackUntilLabelIsSet)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_count =
+    findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(2);
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
+  ASSERT_NE(nullptr, series);
+
+  findChild(series, "Topic")->setValue("/cmd_vel");
+  findChild(series, "Field")->setValue("angular/z");
+
+  EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "/cmd_vel/angular/z");
+
+  findChild(series, "Label")->setValue("Angular Z");
+
+  EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "Angular Z");
+}
+
 TEST(Plot2DDisplay, InitializesInjectedOverlayBackend)
 {
   ensureQtApplication();

@@ -1274,6 +1274,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
         value.label.clear();
       }
     } else {
+      value.label.clear();
       value.color = defaultSeriesColor(static_cast<std::size_t>(i));
     }
 
