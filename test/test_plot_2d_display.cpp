@@ -422,7 +422,8 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
   ASSERT_NE(nullptr, series);
   EXPECT_NE(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series Count"));
-  EXPECT_NE(nullptr, findChild(series, "Enabled"));
+  EXPECT_TRUE(series->getValue().canConvert<bool>());
+  EXPECT_EQ(nullptr, findChild(series, "Enabled"));
   EXPECT_NE(nullptr, findChild(series, "Action"));
   EXPECT_NE(nullptr, findChild(series, "Topic"));
   EXPECT_NE(nullptr, findChild(series, "X Field"));
@@ -534,21 +535,25 @@ TEST(Plot2DDisplay, PlotModeSwitchesBetweenTimeAndXYSeriesFields)
   EXPECT_FALSE(xy_history_mode->getHidden());
 }
 
-TEST(Plot2DDisplay, SeriesRootSummarizesConfiguredSourceForPlotMode)
+TEST(Plot2DDisplay, SeriesRootKeepsEnabledValueWhenSourceChanges)
 {
   ensureQtApplication();
   Plot2DDisplay display;
   auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
   ASSERT_NE(nullptr, series);
 
+  EXPECT_EQ(series->getName(), "Series 1");
+  EXPECT_TRUE(series->getValue().toBool());
+
   findChild(series, "Topic")->setValue("/cmd_vel");
   findChild(series, "Field")->setValue("linear/x");
 
-  EXPECT_EQ(series->getValue().toString(), "/cmd_vel/linear/x");
+  EXPECT_EQ(series->getName(), "Series 1");
+  EXPECT_TRUE(series->getValue().toBool());
 
   findChild(&display, "Plot Mode")->setValue("XY");
 
-  EXPECT_EQ(series->getValue().toString(), "/cmd_vel");
+  EXPECT_TRUE(series->getValue().toBool());
 }
 
 TEST(Plot2DDisplay, InitializesInjectedOverlayBackend)
@@ -664,7 +669,7 @@ TEST(Plot2DDisplay, BooleanPropertiesUseCheckboxEditing)
   std::vector<rviz_common::properties::Property *> bool_properties{
     Plot2DDisplayTestAccessor::pausePlot(display),
     Plot2DDisplayTestAccessor::clearHistory(display),
-    findChild(series, "Enabled"),
+    series,
     findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Major Grid"),
@@ -687,7 +692,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
   ASSERT_NE(nullptr, series);
 
-  findChild(series, "Enabled")->setValue(false);
+  series->setValue(false);
   findChild(series, "Topic")->setValue("/odom");
   findChild(&display, "Plot Mode")->setValue("XY");
   findChild(series, "X Field")->setValue("pose/pose/position/x");

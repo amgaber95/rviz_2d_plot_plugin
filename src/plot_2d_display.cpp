@@ -268,19 +268,6 @@ PlotMode plotModeFromName(const std::string & name)
   return PlotMode::TimeSeries;
 }
 
-QString seriesSourceSummary(const SeriesConfig & series, const PlotMode plot_mode)
-{
-  if (series.topic.empty()) {
-    return {};
-  }
-  if (plot_mode == PlotMode::XY || series.field.empty()) {
-    return QString::fromStdString(series.topic);
-  }
-
-  const std::string separator = series.field.front() == '/' ? "" : "/";
-  return QString::fromStdString(series.topic + separator + series.field);
-}
-
 void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
 {
   if (!property) {
@@ -1091,7 +1078,7 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
   series.reserve(series_properties_.size());
   for (const SeriesPropertySet & properties : series_properties_) {
     SeriesConfig config;
-    config.enabled = properties.enabled && properties.enabled->getBool();
+    config.enabled = properties.root && properties.root->getBool();
     config.topic = properties.topic ? properties.topic->getStdString() : "";
     config.x_field = properties.x_field ? properties.x_field->getStdString() : "";
     config.y_field = properties.y_field ? properties.y_field->getStdString() : "";
@@ -1203,15 +1190,13 @@ void Plot2DDisplay::rebuildSeriesProperties_(
 
     SeriesPropertySet properties;
     const QString name = "Series " + QString::number(i + 1);
-    properties.root = new rviz_common::properties::Property(
-      name, QVariant(), "Plotted topic field.", series_root_property_);
+    properties.root = new rviz_common::properties::BoolProperty(
+      name, value.enabled, "Enable this plotted topic field.", series_root_property_,
+      SLOT(onConfigPropertyChanged()), this);
     properties.action = new rviz_common::properties::EnumProperty(
       "Action", kNoSeriesAction, "Duplicate, delete, or reorder this series.",
       properties.root, SLOT(onSeriesActionChanged()), this);
     addSeriesActionOptions(properties.action);
-    properties.enabled = new rviz_common::properties::BoolProperty(
-      "Enabled", value.enabled, "Enable this series.", properties.root,
-      SLOT(onConfigPropertyChanged()), this);
     properties.topic = new ContainsFilterEditableEnumProperty(
       "Topic", QString::fromStdString(value.topic), "ROS 2 topic to subscribe to.",
       properties.root, SLOT(onConfigPropertyChanged()), this);
@@ -1411,16 +1396,6 @@ void Plot2DDisplay::updateModePropertyVisibility_()
 
 void Plot2DDisplay::updateSeriesPropertySummaries_()
 {
-  const PlotMode plot_mode = plot_mode_property_ ?
-    plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
-  const std::vector<SeriesConfig> series = seriesConfigFromProperties_();
-  for (std::size_t i = 0; i < series_properties_.size() && i < series.size(); ++i) {
-    if (!series_properties_[i].root) {
-      continue;
-    }
-    const QSignalBlocker blocker(series_properties_[i].root);
-    series_properties_[i].root->setValue(seriesSourceSummary(series[i], plot_mode));
-  }
 }
 
 const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField_(

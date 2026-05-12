@@ -99,9 +99,8 @@ private:
 
   struct SeriesPropertySet
   {
-    rviz_common::properties::Property * root{nullptr};
+    rviz_common::properties::BoolProperty * root{nullptr};
     rviz_common::properties::EnumProperty * action{nullptr};
-    rviz_common::properties::BoolProperty * enabled{nullptr};
     rviz_common::properties::EditableEnumProperty * topic{nullptr};
     rviz_common::properties::EditableEnumProperty * x_field{nullptr};
     rviz_common::properties::EditableEnumProperty * y_field{nullptr};
