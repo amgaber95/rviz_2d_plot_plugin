@@ -18,8 +18,7 @@
   <depend>rosidl_typesupport_cpp</depend>
   <depend>rosidl_typesupport_introspection_cpp</depend>
   <depend>rviz_common</depend>
-  <depend>rviz_2d_overlay_plugins</depend>
-  <depend>rviz_2d_overlay_msgs</depend>
+  <depend>rviz_ogre_vendor</depend>
   <depend>rviz_rendering</depend>
 
   <build_depend>qtbase5-dev</build_depend>

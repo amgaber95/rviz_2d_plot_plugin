@@ -16,8 +16,6 @@ find_package(rcpputils REQUIRED)
 find_package(rosidl_typesupport_cpp REQUIRED)
 find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
-find_package(rviz_2d_overlay_plugins REQUIRED)
-find_package(rviz_2d_overlay_msgs REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
@@ -59,7 +57,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
   Qt5::Widgets
   rviz_ogre_vendor::OgreMain
   rviz_ogre_vendor::OgreOverlay
-  rviz_2d_overlay_plugins::rviz_2d_overlay_plugins
 )
 
 ament_target_dependencies(${PROJECT_NAME} PUBLIC
@@ -69,7 +66,6 @@ ament_target_dependencies(${PROJECT_NAME} PUBLIC
   rosidl_typesupport_cpp
   rosidl_typesupport_introspection_cpp
   rviz_common
-  rviz_2d_overlay_msgs
   rviz_rendering
 )
 

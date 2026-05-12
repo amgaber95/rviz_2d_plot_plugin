@@ -6,9 +6,11 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -58,4 +60,30 @@ TEST(PluginAssets, ClassIconExists)
 
   const std::string svg = readFile(icon_path);
   EXPECT_NE(svg.find("<svg"), std::string::npos);
+}
+
+TEST(PluginAssets, ProductionFilesDoNotDependOnThirdPartyOverlayPlugin)
+{
+  const std::filesystem::path project_root{PROJECT_SOURCE_DIR};
+  std::vector<std::filesystem::path> files{
+    project_root / "package.xml",
+    project_root / "CMakeLists.txt"};
+
+  for (const std::filesystem::path relative_dir : {"include", "src"}) {
+    for (const auto & entry :
+      std::filesystem::recursive_directory_iterator(project_root / relative_dir))
+    {
+      if (entry.is_regular_file()) {
+        files.push_back(entry.path());
+      }
+    }
+  }
+
+  for (const std::filesystem::path & file : files) {
+    const std::string content = readFile(file.string());
+    EXPECT_EQ(content.find("rviz_2d_overlay_plugins"), std::string::npos)
+      << file;
+    EXPECT_EQ(content.find("rviz_2d_overlay_msgs"), std::string::npos)
+      << file;
+  }
 }
