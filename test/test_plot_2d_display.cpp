@@ -559,6 +559,11 @@ TEST(Plot2DDisplay, SeriesRootShowsConfiguredSourceForPlotMode)
 
   EXPECT_TRUE(series->getValue().toBool());
   EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "/cmd_vel");
+
+  findChild(series, "Label")->setValue("Linear X");
+
+  EXPECT_TRUE(series->getValue().toBool());
+  EXPECT_EQ(series->getViewData(0, Qt::DisplayRole).toString(), "Linear X");
 }
 
 TEST(Plot2DDisplay, InitializesInjectedOverlayBackend)

@@ -1499,7 +1499,10 @@ void Plot2DDisplay::updateSeriesPropertySummaries_()
       continue;
     }
 
-    QString label = QString::fromStdString(seriesDefaultLabel(series[i], plot_mode));
+    QString label = QString::fromStdString(series[i].label);
+    if (label.isEmpty()) {
+      label = QString::fromStdString(seriesDefaultLabel(series[i], plot_mode));
+    }
     if (label.isEmpty()) {
       label = "Series " + QString::number(static_cast<int>(i) + 1);
     }
