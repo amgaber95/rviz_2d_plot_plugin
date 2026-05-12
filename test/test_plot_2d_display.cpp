@@ -1027,6 +1027,57 @@ TEST(Plot2DDisplay, SeriesCommandCheckboxesDuplicateAndDeleteSeries)
   EXPECT_EQ(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3"));
 }
 
+TEST(Plot2DDisplay, SeriesRowsUseNativeDragDropReordering)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_root = Plot2DDisplayTestAccessor::seriesRoot(display);
+  auto * series_count = findChild(series_root, "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(3);
+  auto * series_1 = findChild(series_root, "Series 1");
+  auto * series_2 = findChild(series_root, "Series 2");
+  auto * series_3 = findChild(series_root, "Series 3");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+  EXPECT_TRUE(series_root->getViewFlags(0) & Qt::ItemIsDropEnabled);
+  EXPECT_TRUE(series_1->getViewFlags(0) & Qt::ItemIsDragEnabled);
+  EXPECT_EQ(nullptr, findChild(series_1, "Move Up"));
+  EXPECT_EQ(nullptr, findChild(series_1, "Move Down"));
+
+  findChild(series_1, "Label")->setValue("First");
+  findChild(series_1, "Topic")->setValue("/first");
+  findChild(series_2, "Label")->setValue("Second");
+  findChild(series_2, "Topic")->setValue("/second");
+  findChild(series_3, "Label")->setValue("Third");
+  findChild(series_3, "Topic")->setValue("/third");
+
+  rviz_common::properties::Property * moved = series_root->takeChildAt(3);
+  ASSERT_NE(nullptr, moved);
+  series_root->addChild(moved, 2);
+  processQtEvents();
+
+  EXPECT_EQ(series_root->childAt(0)->getName(), "Series Count");
+  series_1 = findChild(series_root, "Series 1");
+  series_2 = findChild(series_root, "Series 2");
+  series_3 = findChild(series_root, "Series 3");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+  EXPECT_EQ(findChild(series_1, "Label")->getValue().toString(), "First");
+  EXPECT_EQ(findChild(series_2, "Label")->getValue().toString(), "Third");
+  EXPECT_EQ(findChild(series_2, "Topic")->getValue().toString(), "/third");
+  EXPECT_EQ(findChild(series_3, "Label")->getValue().toString(), "Second");
+
+  const Plot2DConfig config = Plot2DDisplayTestAccessor::configFromProperties(display);
+  ASSERT_EQ(config.series.size(), 3U);
+  EXPECT_EQ(config.series[0].label, "First");
+  EXPECT_EQ(config.series[1].label, "Third");
+  EXPECT_EQ(config.series[2].label, "Second");
+}
+
 TEST(Plot2DDisplay, BuildsPlotConfigFromMultipleSeriesProperties)
 {
   ensureQtApplication();

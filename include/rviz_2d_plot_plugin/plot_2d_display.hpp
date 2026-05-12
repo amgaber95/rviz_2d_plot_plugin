@@ -153,6 +153,9 @@ private:
   void updateSeriesPropertySummaries_();
   const SeriesPropertySet * seriesPropertiesForField_(
     rviz_common::properties::EditableEnumProperty * property) const;
+  void onSeriesChildListChanged_(rviz_common::properties::Property * property);
+  void scheduleSeriesOrderSync_();
+  bool syncSeriesPropertyOrder_();
   void resolveAndSubscribe_();
   void onSerializedMessage_(
     const std::string & topic,
@@ -186,6 +189,8 @@ private:
   rviz_common::properties::Property * series_root_property_{nullptr};
   rviz_common::properties::IntProperty * series_count_property_{nullptr};
   std::vector<SeriesPropertySet> series_properties_;
+  bool rebuilding_series_properties_{false};
+  bool series_order_sync_pending_{false};
   rviz_common::properties::Property * time_root_property_{nullptr};
   rviz_common::properties::EnumProperty * time_source_property_{nullptr};
   rviz_common::properties::FloatProperty * window_seconds_property_{nullptr};

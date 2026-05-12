@@ -114,8 +114,40 @@ public:
     return rviz_common::properties::BoolProperty::getViewData(column, role);
   }
 
+  Qt::ItemFlags getViewFlags(const int column) const override
+  {
+    Qt::ItemFlags flags = rviz_common::properties::BoolProperty::getViewFlags(column);
+    if (column == 0) {
+      flags |= Qt::ItemIsDragEnabled;
+    }
+    return flags;
+  }
+
 private:
   QString display_label_;
+};
+
+class SeriesGroupProperty : public rviz_common::properties::Property
+{
+public:
+  using rviz_common::properties::Property::Property;
+
+  Qt::ItemFlags getViewFlags(const int column) const override
+  {
+    Qt::ItemFlags flags = rviz_common::properties::Property::getViewFlags(column);
+    if (column == 0) {
+      flags |= Qt::ItemIsDropEnabled;
+    }
+    return flags;
+  }
+
+  void addChild(rviz_common::properties::Property * child, int index = -1) override
+  {
+    if (dynamic_cast<SeriesRootProperty *>(child) && index >= 0) {
+      index = std::max(1, index);
+    }
+    rviz_common::properties::Property::addChild(child, index);
+  }
 };
 
 rviz_common::properties::StatusProperty::Level statusLevel(
@@ -627,8 +659,13 @@ Plot2DDisplay::Plot2DDisplay()
     this, SLOT(onPlotModeChanged()), this);
   addPlotModeOptions(plot_mode_property_);
 
-  series_root_property_ = new rviz_common::properties::Property(
+  series_root_property_ = new SeriesGroupProperty(
     "Series", QVariant(), "Topic field series to draw.", this);
+  QObject::connect(
+    series_root_property_,
+    &rviz_common::properties::Property::childListChanged,
+    this,
+    &Plot2DDisplay::onSeriesChildListChanged_);
   series_count_property_ = new rviz_common::properties::IntProperty(
     "Series Count", 1, "Number of plotted topic fields.",
     series_root_property_, SLOT(onSeriesCountChanged()), this, 1, 12);
@@ -1222,6 +1259,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     series_count_property_->setInt(repaired_count);
   }
 
+  rebuilding_series_properties_ = true;
   series_root_property_->removeChildren(1);
   series_properties_.clear();
   series_properties_.reserve(static_cast<std::size_t>(repaired_count));
@@ -1321,6 +1359,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       properties.root, SLOT(onConfigPropertyChanged()), this);
     series_properties_.push_back(properties);
   }
+  rebuilding_series_properties_ = false;
   updateModePropertyVisibility_();
   updateSeriesPropertySummaries_();
 }
@@ -1477,6 +1516,73 @@ const Plot2DDisplay::SeriesPropertySet * Plot2DDisplay::seriesPropertiesForField
     }
   }
   return nullptr;
+}
+
+void Plot2DDisplay::onSeriesChildListChanged_(
+  rviz_common::properties::Property * property)
+{
+  if (property == series_root_property_ && !rebuilding_series_properties_) {
+    scheduleSeriesOrderSync_();
+  }
+}
+
+void Plot2DDisplay::scheduleSeriesOrderSync_()
+{
+  if (series_order_sync_pending_) {
+    return;
+  }
+  series_order_sync_pending_ = true;
+  QTimer::singleShot(
+    0,
+    this,
+    [this]() {
+      series_order_sync_pending_ = false;
+      if (syncSeriesPropertyOrder_()) {
+        onConfigPropertyChanged();
+      }
+    });
+}
+
+bool Plot2DDisplay::syncSeriesPropertyOrder_()
+{
+  if (!series_root_property_) {
+    return false;
+  }
+
+  std::vector<SeriesPropertySet> ordered;
+  ordered.reserve(series_properties_.size());
+  for (int i = 1; i < series_root_property_->numChildren(); ++i) {
+    rviz_common::properties::Property * child = series_root_property_->childAt(i);
+    const auto it = std::find_if(
+      series_properties_.begin(), series_properties_.end(),
+      [child](const SeriesPropertySet & properties) {
+        return properties.root == child;
+      });
+    if (it != series_properties_.end()) {
+      ordered.push_back(*it);
+    }
+  }
+
+  if (ordered.size() != series_properties_.size()) {
+    return false;
+  }
+
+  bool changed = false;
+  for (std::size_t i = 0; i < ordered.size(); ++i) {
+    changed = changed || ordered[i].root != series_properties_[i].root;
+  }
+  if (!changed) {
+    return false;
+  }
+
+  series_properties_ = std::move(ordered);
+  for (std::size_t i = 0; i < series_properties_.size(); ++i) {
+    if (series_properties_[i].root) {
+      series_properties_[i].root->setName("Series " + QString::number(static_cast<int>(i) + 1));
+    }
+  }
+  updateSeriesPropertySummaries_();
+  return true;
 }
 
 void Plot2DDisplay::resolveAndSubscribe_()
