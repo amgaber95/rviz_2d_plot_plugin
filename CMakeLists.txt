@@ -18,6 +18,7 @@ find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_2d_overlay_plugins REQUIRED)
 find_package(rviz_2d_overlay_msgs REQUIRED)
+find_package(rviz_ogre_vendor REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
 
@@ -32,6 +33,7 @@ add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/sample_buffer.hpp
   include/rviz_2d_plot_plugin/tick_generator.hpp
   include/rviz_2d_plot_plugin/topic_field_introspection.hpp
+  src/overlay_backend.cpp
   src/plot_2d_config.cpp
   src/plot_2d_controller.cpp
   src/plot_2d_display.cpp
@@ -49,8 +51,14 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+target_include_directories(${PROJECT_NAME} PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
   Qt5::Widgets
+  rviz_ogre_vendor::OgreMain
+  rviz_ogre_vendor::OgreOverlay
   rviz_2d_overlay_plugins::rviz_2d_overlay_plugins
 )
 
@@ -126,6 +134,12 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_plot_2d_renderer test/test_plot_2d_renderer.cpp)
   target_link_libraries(test_plot_2d_renderer ${PROJECT_NAME})
+
+  ament_add_gtest(test_overlay_backend test/test_overlay_backend.cpp)
+  target_include_directories(test_overlay_backend PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
+  target_link_libraries(test_overlay_backend ${PROJECT_NAME})
 
   ament_add_gtest(test_sample_buffer test/test_sample_buffer.cpp)
   target_link_libraries(test_sample_buffer ${PROJECT_NAME})
