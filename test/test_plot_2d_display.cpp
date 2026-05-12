@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QCompleter>
+#include <QImage>
 #include <QString>
 #include <QStyleOptionViewItem>
 #include <Qt>
@@ -38,10 +39,7 @@
 #include <rviz_common/properties/property.hpp>
 #include <rviz_common/properties/string_property.hpp>
 
-namespace Ogre
-{
-class SceneManager;
-}  // namespace Ogre
+#include "overlay_backend.hpp"
 
 #include "rviz_2d_plot_plugin/plot_2d_config.hpp"
 #include "rviz_2d_plot_plugin/plot_2d_controller.hpp"
@@ -139,16 +137,31 @@ public:
     display.subscription_factory_.create_generic_subscription = std::move(factory);
   }
 
-  static void setOverlayPreparer(
+  static void setOverlayBackendFactory(
     Plot2DDisplay & display,
-    std::function<void(Ogre::SceneManager *)> prepare)
+    std::function<std::unique_ptr<OverlayBackend>(std::string)> factory)
   {
-    display.overlay_backend_ops_.prepare_overlays = std::move(prepare);
+    display.overlay_backend_factory_ = std::move(factory);
   }
 
-  static void prepareOverlayRendering(Plot2DDisplay & display)
+  static void initializeOverlayBackend(Plot2DDisplay & display)
   {
-    display.prepareOverlayRendering_();
+    display.initializeOverlayBackend_();
+  }
+
+  static void enable(Plot2DDisplay & display)
+  {
+    display.onEnable();
+  }
+
+  static void disable(Plot2DDisplay & display)
+  {
+    display.onDisable();
+  }
+
+  static void renderOverlay(Plot2DDisplay & display)
+  {
+    display.renderOverlay_();
   }
 
   static void resolveAndSubscribe(Plot2DDisplay & display)
@@ -218,6 +231,9 @@ namespace
 using rviz_2d_plot_plugin::AxisScaleMode;
 using rviz_2d_plot_plugin::HorizontalAlignment;
 using rviz_2d_plot_plugin::LegendPosition;
+using rviz_2d_plot_plugin::OverlayBackend;
+using rviz_2d_plot_plugin::OverlayBackendResult;
+using rviz_2d_plot_plugin::OverlayGeometry;
 using rviz_2d_plot_plugin::Plot2DConfig;
 using rviz_2d_plot_plugin::PlotControllerStatus;
 using rviz_2d_plot_plugin::PlotMode;
@@ -229,6 +245,49 @@ using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
 using rviz_2d_plot_plugin::XYAxisScaleMode;
 using rviz_2d_plot_plugin::XYHistoryMode;
+
+class RecordingOverlayBackend final : public OverlayBackend
+{
+public:
+  OverlayBackendResult initialize(Ogre::SceneManager * scene_manager) override
+  {
+    ++initialize_calls;
+    initialized_scene_manager = scene_manager;
+    return {};
+  }
+
+  OverlayBackendResult setGeometry(const OverlayGeometry & geometry) override
+  {
+    events.push_back("geometry");
+    geometries.push_back(geometry);
+    return {};
+  }
+
+  void setVisible(const bool visible) override
+  {
+    events.push_back(visible ? "show" : "hide");
+    visibility.push_back(visible);
+  }
+
+  bool isReady() const override
+  {
+    return true;
+  }
+
+  OverlayBackendResult updateImage(const QImage & image) override
+  {
+    events.push_back("image");
+    image_sizes.push_back({image.width(), image.height()});
+    return {};
+  }
+
+  int initialize_calls{0};
+  Ogre::SceneManager * initialized_scene_manager{nullptr};
+  std::vector<OverlayGeometry> geometries;
+  std::vector<bool> visibility;
+  std::vector<std::pair<int, int>> image_sizes;
+  std::vector<std::string> events;
+};
 
 void ensureQtApplication()
 {
@@ -492,21 +551,90 @@ TEST(Plot2DDisplay, SeriesRootSummarizesConfiguredSourceForPlotMode)
   EXPECT_EQ(series->getValue().toString(), "/cmd_vel");
 }
 
-TEST(Plot2DDisplay, PreparesRvizOverlayRenderingBackend)
+TEST(Plot2DDisplay, InitializesInjectedOverlayBackend)
 {
   ensureQtApplication();
   Plot2DDisplay display;
-  int prepare_calls = 0;
-  Plot2DDisplayTestAccessor::setOverlayPreparer(
+  RecordingOverlayBackend * backend = nullptr;
+  Plot2DDisplayTestAccessor::setOverlayBackendFactory(
     display,
-    [&prepare_calls](Ogre::SceneManager * scene_manager) {
-      (void)scene_manager;
-      ++prepare_calls;
+    [&backend](std::string) {
+      auto created = std::make_unique<RecordingOverlayBackend>();
+      backend = created.get();
+      return created;
     });
 
-  Plot2DDisplayTestAccessor::prepareOverlayRendering(display);
+  Plot2DDisplayTestAccessor::initializeOverlayBackend(display);
 
-  EXPECT_EQ(prepare_calls, 1);
+  ASSERT_NE(nullptr, backend);
+  EXPECT_EQ(backend->initialize_calls, 1);
+  ASSERT_FALSE(backend->geometries.empty());
+  EXPECT_EQ(backend->geometries.back().width, 360);
+  EXPECT_EQ(backend->geometries.back().height, 220);
+  EXPECT_EQ(backend->geometries.back().x_offset, 10);
+  EXPECT_EQ(backend->geometries.back().y_offset, 10);
+  ASSERT_FALSE(backend->visibility.empty());
+  EXPECT_FALSE(backend->visibility.back());
+}
+
+TEST(Plot2DDisplay, EnableAndDisableToggleOverlayBackendVisibility)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  RecordingOverlayBackend * backend = nullptr;
+  Plot2DDisplayTestAccessor::setOverlayBackendFactory(
+    display,
+    [&backend](std::string) {
+      auto created = std::make_unique<RecordingOverlayBackend>();
+      backend = created.get();
+      return created;
+    });
+  Plot2DDisplayTestAccessor::initializeOverlayBackend(display);
+  ASSERT_NE(nullptr, backend);
+  backend->visibility.clear();
+
+  Plot2DDisplayTestAccessor::enable(display);
+  Plot2DDisplayTestAccessor::disable(display);
+
+  ASSERT_GE(backend->visibility.size(), 2U);
+  EXPECT_TRUE(backend->visibility.front());
+  EXPECT_FALSE(backend->visibility.back());
+}
+
+TEST(Plot2DDisplay, RenderOverlayUpdatesGeometryBeforeImageUpload)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  RecordingOverlayBackend * backend = nullptr;
+  Plot2DDisplayTestAccessor::setOverlayBackendFactory(
+    display,
+    [&backend](std::string) {
+      auto created = std::make_unique<RecordingOverlayBackend>();
+      backend = created.get();
+      return created;
+    });
+  findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Width")->setValue(420);
+  findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Height")->setValue(180);
+  Plot2DDisplayTestAccessor::initializeOverlayBackend(display);
+  ASSERT_NE(nullptr, backend);
+  backend->events.clear();
+  backend->geometries.clear();
+  backend->image_sizes.clear();
+
+  Plot2DDisplayTestAccessor::renderOverlay(display);
+
+  const auto geometry_event =
+    std::find(backend->events.begin(), backend->events.end(), "geometry");
+  const auto image_event =
+    std::find(backend->events.begin(), backend->events.end(), "image");
+  ASSERT_NE(geometry_event, backend->events.end());
+  ASSERT_NE(image_event, backend->events.end());
+  EXPECT_LT(geometry_event, image_event);
+  ASSERT_EQ(backend->geometries.size(), 1U);
+  EXPECT_EQ(backend->geometries[0].width, 420);
+  EXPECT_EQ(backend->geometries[0].height, 180);
+  ASSERT_EQ(backend->image_sizes.size(), 1U);
+  EXPECT_EQ(backend->image_sizes[0], std::make_pair(420, 180));
 }
 
 TEST(Plot2DDisplay, PlacesActionsBeforeConfigurationGroups)

@@ -123,6 +123,9 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_plot_2d_controller rclcpp geometry_msgs)
 
   ament_add_gtest(test_plot_2d_display test/test_plot_2d_display.cpp)
+  target_include_directories(test_plot_2d_display PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+  )
   target_link_libraries(test_plot_2d_display ${PROJECT_NAME})
   ament_target_dependencies(test_plot_2d_display rclcpp geometry_msgs std_msgs)
 

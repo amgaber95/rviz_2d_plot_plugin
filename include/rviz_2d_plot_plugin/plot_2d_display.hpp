@@ -39,19 +39,10 @@ class StringProperty;
 }  // namespace properties
 }  // namespace rviz_common
 
-namespace Ogre
-{
-class SceneManager;
-}  // namespace Ogre
-
-namespace rviz_2d_overlay_plugins
-{
-class OverlayObject;
-}  // namespace rviz_2d_overlay_plugins
-
 namespace rviz_2d_plot_plugin
 {
 
+class OverlayBackend;
 class Plot2DDisplayTestAccessor;
 
 /// RViz display that manages properties, ROS subscriptions, and plot overlays.
@@ -104,11 +95,6 @@ private:
         const std::string &,
         rclcpp::QoS,
         SerializedMessageCallback)> create_generic_subscription;
-  };
-
-  struct OverlayBackendOps
-  {
-    std::function<void(Ogre::SceneManager *)> prepare_overlays;
   };
 
   struct SeriesPropertySet
@@ -181,6 +167,7 @@ private:
   std::vector<RenderableReference> renderableReferences_() const;
   std::vector<RenderableReference> renderableReferencesFromConfig_(
     const Plot2DConfig & config) const;
+  void initializeOverlayBackend_();
   void updateOverlayGeometry_();
   void updateOverlayGeometry_(const Plot2DConfig & config);
   void renderOverlay_();
@@ -188,7 +175,6 @@ private:
   bool shouldRetrySubscriptions_() const;
   double receiveNowSeconds_() const;
   double plotNowSeconds_(TimeSource source) const;
-  void prepareOverlayRendering_();
   TopicTypeMap topicNamesAndTypes_() const;
   std::vector<std::string> topicOptions_() const;
   std::vector<std::string> fieldOptionsForTopic_(const std::string & topic) const;
@@ -247,13 +233,13 @@ private:
   rviz_common::properties::ColorProperty * text_color_property_{nullptr};
   rviz_common::properties::IntProperty * font_size_property_{nullptr};
 
-  std::shared_ptr<rviz_2d_overlay_plugins::OverlayObject> overlay_;
+  std::unique_ptr<OverlayBackend> overlay_backend_;
+  std::function<std::unique_ptr<OverlayBackend>(std::string)> overlay_backend_factory_;
   rclcpp::Node::SharedPtr node_;
   std::vector<rclcpp::GenericSubscription::SharedPtr> subscriptions_;
   rclcpp::QoS qos_profile_{10};
   RosGraphOps ros_graph_ops_;
   SubscriptionFactory subscription_factory_;
-  OverlayBackendOps overlay_backend_ops_;
   Plot2DController controller_;
   Plot2DRenderer renderer_;
   double retry_elapsed_seconds_{0.0};

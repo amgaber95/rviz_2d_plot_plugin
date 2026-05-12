@@ -11,7 +11,6 @@
 #include <QCompleter>
 #include <QImage>
 #include <QObject>
-#include <QPainter>
 #include <QSignalBlocker>
 #include <QStyleOptionViewItem>
 #include <QTimer>
@@ -27,7 +26,6 @@
 #include <utility>
 
 #include <pluginlib/class_list_macros.hpp>
-#include <rviz_2d_overlay_plugins/overlay_utils.hpp>
 #include <rviz_common/config.hpp>
 #include <rviz_common/display_context.hpp>
 #include <rviz_common/properties/bool_property.hpp>
@@ -39,7 +37,8 @@
 #include <rviz_common/properties/property.hpp>
 #include <rviz_common/properties/status_property.hpp>
 #include <rviz_common/properties/string_property.hpp>
-#include <rviz_rendering/render_system.hpp>
+
+#include "overlay_backend.hpp"
 
 namespace rviz_2d_plot_plugin
 {
@@ -415,32 +414,32 @@ void addVerticalAlignmentOptions(rviz_common::properties::EnumProperty * propert
   property->addOptionStd(verticalAlignmentName(VerticalAlignment::Bottom));
 }
 
-rviz_2d_overlay_plugins::HorizontalAlignment toOverlayHorizontalAlignment(
+OverlayHorizontalAlignment toOverlayHorizontalAlignment(
   const HorizontalAlignment alignment)
 {
   switch (alignment) {
     case HorizontalAlignment::Left:
-      return rviz_2d_overlay_plugins::HorizontalAlignment::LEFT;
+      return OverlayHorizontalAlignment::Left;
     case HorizontalAlignment::Center:
-      return rviz_2d_overlay_plugins::HorizontalAlignment::CENTER;
+      return OverlayHorizontalAlignment::Center;
     case HorizontalAlignment::Right:
-      return rviz_2d_overlay_plugins::HorizontalAlignment::RIGHT;
+      return OverlayHorizontalAlignment::Right;
   }
-  return rviz_2d_overlay_plugins::HorizontalAlignment::RIGHT;
+  return OverlayHorizontalAlignment::Right;
 }
 
-rviz_2d_overlay_plugins::VerticalAlignment toOverlayVerticalAlignment(
+OverlayVerticalAlignment toOverlayVerticalAlignment(
   const VerticalAlignment alignment)
 {
   switch (alignment) {
     case VerticalAlignment::Top:
-      return rviz_2d_overlay_plugins::VerticalAlignment::TOP;
+      return OverlayVerticalAlignment::Top;
     case VerticalAlignment::Center:
-      return rviz_2d_overlay_plugins::VerticalAlignment::CENTER;
+      return OverlayVerticalAlignment::Center;
     case VerticalAlignment::Bottom:
-      return rviz_2d_overlay_plugins::VerticalAlignment::BOTTOM;
+      return OverlayVerticalAlignment::Bottom;
   }
-  return rviz_2d_overlay_plugins::VerticalAlignment::TOP;
+  return OverlayVerticalAlignment::Top;
 }
 
 constexpr const char * kNoSeriesAction = "None";
@@ -594,10 +593,10 @@ std::vector<ReferenceConfig> referencePresetFromName(
 
 Plot2DDisplay::Plot2DDisplay()
 {
-  overlay_backend_ops_.prepare_overlays =
-    [](Ogre::SceneManager * scene_manager)
+  overlay_backend_factory_ =
+    [](std::string name)
     {
-      rviz_rendering::RenderSystem::get()->prepareOverlays(scene_manager);
+      return makeOgreOverlayBackend(std::move(name));
     };
 
   pause_plot_property_ = new rviz_common::properties::BoolProperty(
@@ -811,9 +810,11 @@ void Plot2DDisplay::load(const rviz_common::Config & config)
 void Plot2DDisplay::onInitialize()
 {
   rviz_common::Display::onInitialize();
-  auto rviz_node = context_->getRosNodeAbstraction().lock();
-  if (rviz_node) {
-    node_ = rviz_node->get_raw_node();
+  if (context_) {
+    auto rviz_node = context_->getRosNodeAbstraction().lock();
+    if (rviz_node) {
+      node_ = rviz_node->get_raw_node();
+    }
   }
 
   if (node_) {
@@ -836,23 +837,15 @@ void Plot2DDisplay::onInitialize()
       };
   }
 
-  std::ostringstream name;
-  name << "rviz_2d_plot_overlay_"
-       << reinterpret_cast<std::uintptr_t>(this);
-  prepareOverlayRendering_();
-  overlay_ =
-    std::make_shared<rviz_2d_overlay_plugins::OverlayObject>(name.str());
-  overlay_->updateTextureSize(360, 220);
-  overlay_->setDimensions(360, 220);
-  overlay_->hide();
+  initializeOverlayBackend_();
   resolveAndSubscribe_();
 }
 
 void Plot2DDisplay::onEnable()
 {
   resolveAndSubscribe_();
-  if (overlay_) {
-    overlay_->show();
+  if (overlay_backend_) {
+    overlay_backend_->setVisible(true);
   }
   renderOverlay_();
 }
@@ -860,8 +853,8 @@ void Plot2DDisplay::onEnable()
 void Plot2DDisplay::onDisable()
 {
   unsubscribe_();
-  if (overlay_) {
-    overlay_->hide();
+  if (overlay_backend_) {
+    overlay_backend_->setVisible(false);
   }
 }
 
@@ -1656,6 +1649,35 @@ std::vector<RenderableReference> Plot2DDisplay::renderableReferencesFromConfig_(
   return output;
 }
 
+void Plot2DDisplay::initializeOverlayBackend_()
+{
+  if (!overlay_backend_factory_) {
+    return;
+  }
+
+  std::ostringstream name;
+  name << "rviz_2d_plot_overlay_"
+       << reinterpret_cast<std::uintptr_t>(this);
+  overlay_backend_ = overlay_backend_factory_(name.str());
+  if (!overlay_backend_) {
+    return;
+  }
+
+  const OverlayBackendResult initialize_result =
+    overlay_backend_->initialize(scene_manager_);
+  if (!initialize_result.ok()) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Overlay",
+      QString::fromStdString(initialize_result.message));
+    overlay_backend_.reset();
+    return;
+  }
+
+  updateOverlayGeometry_();
+  overlay_backend_->setVisible(false);
+}
+
 void Plot2DDisplay::updateOverlayGeometry_()
 {
   updateOverlayGeometry_(configFromProperties_());
@@ -1663,31 +1685,42 @@ void Plot2DDisplay::updateOverlayGeometry_()
 
 void Plot2DDisplay::updateOverlayGeometry_(const Plot2DConfig & config)
 {
-  if (!overlay_) {
+  if (!overlay_backend_) {
     return;
   }
 
-  overlay_->updateTextureSize(config.layout.width, config.layout.height);
-  overlay_->setDimensions(config.layout.width, config.layout.height);
-  overlay_->setPosition(
-    config.layout.x_offset,
-    config.layout.y_offset,
-    toOverlayHorizontalAlignment(config.layout.horizontal_alignment),
-    toOverlayVerticalAlignment(config.layout.vertical_alignment));
+  OverlayGeometry geometry;
+  geometry.width = config.layout.width;
+  geometry.height = config.layout.height;
+  geometry.x_offset = config.layout.x_offset;
+  geometry.y_offset = config.layout.y_offset;
+  geometry.horizontal_alignment =
+    toOverlayHorizontalAlignment(config.layout.horizontal_alignment);
+  geometry.vertical_alignment =
+    toOverlayVerticalAlignment(config.layout.vertical_alignment);
+
+  const OverlayBackendResult geometry_result =
+    overlay_backend_->setGeometry(geometry);
+  if (!geometry_result.ok()) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Overlay",
+      QString::fromStdString(geometry_result.message));
+  }
 }
 
 void Plot2DDisplay::renderOverlay_()
 {
-  if (!overlay_) {
+  if (!overlay_backend_) {
     return;
   }
 
   const RenderSnapshot snapshot = renderSnapshot_();
   updateOverlayGeometry_(snapshot.config);
   if (isEnabled()) {
-    overlay_->show();
+    overlay_backend_->setVisible(true);
   }
-  if (!overlay_->isTextureReady()) {
+  if (!overlay_backend_->isReady()) {
     return;
   }
 
@@ -1696,15 +1729,14 @@ void Plot2DDisplay::renderOverlay_()
     settings,
     renderableSeriesFromSnapshot_(snapshot),
     renderableReferencesFromConfig_(snapshot.config));
-  QColor clear_color(0, 0, 0, 0);
-  auto buffer = overlay_->getBuffer();
-  QImage target = buffer.getQImage(
-    static_cast<unsigned int>(settings.width),
-    static_cast<unsigned int>(settings.height),
-    clear_color);
-  {
-    QPainter painter(&target);
-    painter.drawImage(0, 0, rendered);
+
+  const OverlayBackendResult image_result = overlay_backend_->updateImage(rendered);
+  if (!image_result.ok()) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Overlay",
+      QString::fromStdString(image_result.message));
+    return;
   }
 
   if (context_) {
@@ -1757,13 +1789,6 @@ double Plot2DDisplay::plotNowSeconds_(const TimeSource source) const
     return newest_sample_time;
   }
   return receiveNowSeconds_();
-}
-
-void Plot2DDisplay::prepareOverlayRendering_()
-{
-  if (overlay_backend_ops_.prepare_overlays) {
-    overlay_backend_ops_.prepare_overlays(scene_manager_);
-  }
 }
 
 TopicTypeMap Plot2DDisplay::topicNamesAndTypes_() const
