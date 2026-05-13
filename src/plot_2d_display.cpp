@@ -925,7 +925,7 @@ void Plot2DDisplay::update(const float wall_dt, const float ros_dt)
   const double refresh_rate = std::max(1.0F, refresh_rate_property_->getFloat());
   if (render_elapsed_seconds_ >= 1.0 / refresh_rate) {
     render_elapsed_seconds_ = 0.0;
-    renderOverlay_();
+    renderOverlay_(false);
   }
 }
 
@@ -1663,9 +1663,6 @@ void Plot2DDisplay::onSerializedMessage_(
     state = controller_.state();
   }
   updateStatusFromController_(state);
-  if (context_) {
-    context_->queueRender();
-  }
 }
 
 void Plot2DDisplay::updateStatusFromController_()
@@ -1871,7 +1868,7 @@ void Plot2DDisplay::updateOverlayGeometry_(const Plot2DConfig & config)
   }
 }
 
-void Plot2DDisplay::renderOverlay_()
+void Plot2DDisplay::renderOverlay_(const bool request_rviz_render)
 {
   if (!overlay_backend_) {
     return;
@@ -1901,7 +1898,7 @@ void Plot2DDisplay::renderOverlay_()
     return;
   }
 
-  if (context_) {
+  if (request_rviz_render && context_) {
     context_->queueRender();
   }
 }

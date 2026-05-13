@@ -174,7 +174,7 @@ private:
   void initializeOverlayBackend_();
   void updateOverlayGeometry_();
   void updateOverlayGeometry_(const Plot2DConfig & config);
-  void renderOverlay_();
+  void renderOverlay_(bool request_rviz_render = true);
   void unsubscribe_();
   bool shouldRetrySubscriptions_() const;
   double receiveNowSeconds_() const;

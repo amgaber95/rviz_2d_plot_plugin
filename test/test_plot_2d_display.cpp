@@ -1387,7 +1387,7 @@ TEST(Plot2DDisplay, HeaderStampRenderWindowFallsBackBeforeSamplesArrive)
   EXPECT_GT(settings.now, 1000.0);
 }
 
-TEST(Plot2DDisplay, SerializedMessageCallbackDoesNotRenderOverlayTexture)
+TEST(Plot2DDisplay, SerializedMessageCallbackDoesNotQueueImmediateRvizRender)
 {
   const std::string body = functionBody(
     plotDisplaySource(),
@@ -1395,7 +1395,17 @@ TEST(Plot2DDisplay, SerializedMessageCallbackDoesNotRenderOverlayTexture)
 
   ASSERT_FALSE(body.empty());
   EXPECT_EQ(body.find("renderOverlay_();"), std::string::npos);
-  EXPECT_NE(body.find("queueRender();"), std::string::npos);
+  EXPECT_EQ(body.find("queueRender();"), std::string::npos);
+}
+
+TEST(Plot2DDisplay, UpdateRefreshDoesNotQueueAnotherRvizFrame)
+{
+  const std::string body = functionBody(
+    plotDisplaySource(),
+    "void Plot2DDisplay::update(");
+
+  ASSERT_FALSE(body.empty());
+  EXPECT_NE(body.find("renderOverlay_(false);"), std::string::npos);
 }
 
 TEST(Plot2DDisplay, DoesNotRecreateHealthySubscriptionsDuringRetryUpdate)
