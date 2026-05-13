@@ -17,6 +17,8 @@ using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::PlotMode;
 using rviz_2d_plot_plugin::PlotStyle;
 using rviz_2d_plot_plugin::Plot2DConfig;
+using rviz_2d_plot_plugin::QoSDurability;
+using rviz_2d_plot_plugin::QoSReliability;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
@@ -64,6 +66,10 @@ TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
   EXPECT_FALSE(config.time.paused);
   EXPECT_EQ(config.time.source, TimeSource::ReceiveTime);
   EXPECT_EQ(config.time.xy_history_mode, XYHistoryMode::RollingTimeWindow);
+
+  EXPECT_EQ(config.qos.reliability, QoSReliability::Reliable);
+  EXPECT_EQ(config.qos.durability, QoSDurability::Volatile);
+  EXPECT_EQ(config.qos.depth, 10);
 
   EXPECT_EQ(config.layout.width, 360);
   EXPECT_EQ(config.layout.height, 220);
@@ -116,6 +122,16 @@ TEST(Plot2DConfig, RepairsInvalidTimeAndLayoutValues)
   EXPECT_DOUBLE_EQ(config.time.refresh_rate_hz, 20.0);
   EXPECT_EQ(config.layout.width, 120);
   EXPECT_EQ(config.layout.height, 80);
+}
+
+TEST(Plot2DConfig, RepairsInvalidQosDepth)
+{
+  Plot2DConfig config;
+  config.qos.depth = 0;
+
+  config.repair();
+
+  EXPECT_EQ(config.qos.depth, 10);
 }
 
 TEST(Plot2DConfig, RepairsInvalidSeriesAppearanceValues)

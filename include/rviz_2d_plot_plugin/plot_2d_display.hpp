@@ -203,6 +203,10 @@ private:
   rviz_common::properties::EnumProperty * time_source_property_{nullptr};
   rviz_common::properties::FloatProperty * window_seconds_property_{nullptr};
   rviz_common::properties::FloatProperty * refresh_rate_property_{nullptr};
+  rviz_common::properties::Property * qos_root_property_{nullptr};
+  rviz_common::properties::EnumProperty * qos_reliability_property_{nullptr};
+  rviz_common::properties::EnumProperty * qos_durability_property_{nullptr};
+  rviz_common::properties::IntProperty * qos_depth_property_{nullptr};
   rviz_common::properties::Property * x_axis_root_property_{nullptr};
   rviz_common::properties::EnumProperty * xy_history_mode_property_{nullptr};
   rviz_common::properties::BoolProperty * x_auto_scale_property_{nullptr};
@@ -253,7 +257,6 @@ private:
   std::function<std::unique_ptr<OverlayBackend>(std::string)> overlay_backend_factory_;
   rclcpp::Node::SharedPtr node_;
   std::vector<rclcpp::GenericSubscription::SharedPtr> subscriptions_;
-  rclcpp::QoS qos_profile_{10};
   RosGraphOps ros_graph_ops_;
   SubscriptionFactory subscription_factory_;
   Plot2DController controller_;

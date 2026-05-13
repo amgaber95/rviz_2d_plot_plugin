@@ -20,6 +20,7 @@ RViz 2 display plugin for rendering live 2D plots directly inside the 3D viewpor
 - **Axis control**: auto-scale with padding, use fixed limits, or preserve 1:1 aspect in XY mode.
 - **Plot styling**: choose line, step, or point rendering with solid, dashed, dotted, or dash-dot strokes.
 - **Timestamp modes**: use receive time or `std_msgs/Header` stamps.
+- **Subscription QoS**: match reliable, best-effort, volatile, or transient-local publishers.
 - **Value transforms**: apply per-series scale and offset for unit conversion.
 - **Plot controls**: pause updates or clear history without restarting RViz.
 - **RViz persistence**: save and restore configuration through `.rviz` files.
@@ -100,6 +101,17 @@ source install/setup.bash
 | Refresh Rate | Render frequency in Hz (default 20) |
 | Time Source | Receive Time · Message Header Stamp |
 | XY History Mode | Rolling Time Window · All Samples |
+
+</details>
+
+<details>
+<summary><b>QoS</b></summary>
+
+| Property | Description |
+|---|---|
+| Reliability | System Default · Reliable · Best Effort |
+| Durability | System Default · Volatile · Transient Local |
+| Depth | Keep-last subscription queue depth |
 
 </details>
 

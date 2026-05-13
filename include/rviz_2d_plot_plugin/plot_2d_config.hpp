@@ -67,6 +67,20 @@ enum class TimeSource
   HeaderStamp,
 };
 
+enum class QoSReliability
+{
+  SystemDefault,
+  Reliable,
+  BestEffort,
+};
+
+enum class QoSDurability
+{
+  SystemDefault,
+  Volatile,
+  TransientLocal,
+};
+
 enum class HorizontalAlignment
 {
   Left,
@@ -115,6 +129,16 @@ struct TimeConfig
   bool paused{false};
   TimeSource source{TimeSource::ReceiveTime};
   XYHistoryMode xy_history_mode{XYHistoryMode::RollingTimeWindow};
+
+  void repair();
+};
+
+/// ROS subscription QoS used for all topic subscriptions in this display.
+struct QoSConfig
+{
+  QoSReliability reliability{QoSReliability::Reliable};
+  QoSDurability durability{QoSDurability::Volatile};
+  int depth{10};
 
   void repair();
 };
@@ -187,6 +211,7 @@ struct Plot2DConfig
   XAxisConfig x_axis;
   AxisConfig y_axis;
   TimeConfig time;
+  QoSConfig qos;
   LayoutConfig layout;
 
   void repair();

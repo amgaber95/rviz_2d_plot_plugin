@@ -347,6 +347,106 @@ void addTimeSourceOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(timeSourceName(TimeSource::HeaderStamp));
 }
 
+std::string qosReliabilityName(const QoSReliability reliability)
+{
+  switch (reliability) {
+    case QoSReliability::SystemDefault:
+      return "System Default";
+    case QoSReliability::Reliable:
+      return "Reliable";
+    case QoSReliability::BestEffort:
+      return "Best Effort";
+  }
+  return "Reliable";
+}
+
+QoSReliability qosReliabilityFromName(const std::string & name)
+{
+  if (name == "System Default") {
+    return QoSReliability::SystemDefault;
+  }
+  if (name == "Best Effort") {
+    return QoSReliability::BestEffort;
+  }
+  return QoSReliability::Reliable;
+}
+
+void addQoSReliabilityOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(qosReliabilityName(QoSReliability::SystemDefault));
+  property->addOptionStd(qosReliabilityName(QoSReliability::Reliable));
+  property->addOptionStd(qosReliabilityName(QoSReliability::BestEffort));
+}
+
+std::string qosDurabilityName(const QoSDurability durability)
+{
+  switch (durability) {
+    case QoSDurability::SystemDefault:
+      return "System Default";
+    case QoSDurability::Volatile:
+      return "Volatile";
+    case QoSDurability::TransientLocal:
+      return "Transient Local";
+  }
+  return "Volatile";
+}
+
+QoSDurability qosDurabilityFromName(const std::string & name)
+{
+  if (name == "System Default") {
+    return QoSDurability::SystemDefault;
+  }
+  if (name == "Transient Local") {
+    return QoSDurability::TransientLocal;
+  }
+  return QoSDurability::Volatile;
+}
+
+void addQoSDurabilityOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(qosDurabilityName(QoSDurability::SystemDefault));
+  property->addOptionStd(qosDurabilityName(QoSDurability::Volatile));
+  property->addOptionStd(qosDurabilityName(QoSDurability::TransientLocal));
+}
+
+rclcpp::QoS qosProfileFromConfig(QoSConfig config)
+{
+  config.repair();
+  rclcpp::QoS qos(static_cast<std::size_t>(config.depth));
+
+  switch (config.reliability) {
+    case QoSReliability::SystemDefault:
+      qos.reliability(rclcpp::ReliabilityPolicy::SystemDefault);
+      break;
+    case QoSReliability::Reliable:
+      qos.reliable();
+      break;
+    case QoSReliability::BestEffort:
+      qos.best_effort();
+      break;
+  }
+
+  switch (config.durability) {
+    case QoSDurability::SystemDefault:
+      qos.durability(rclcpp::DurabilityPolicy::SystemDefault);
+      break;
+    case QoSDurability::Volatile:
+      qos.durability_volatile();
+      break;
+    case QoSDurability::TransientLocal:
+      qos.transient_local();
+      break;
+  }
+
+  return qos;
+}
+
 std::string plotModeName(const PlotMode mode)
 {
   switch (mode) {
@@ -722,6 +822,22 @@ Plot2DDisplay::Plot2DDisplay()
     "Refresh Rate", 20.0F, "Overlay redraw rate in Hz.", time_root_property_,
     SLOT(onRenderPropertyChanged()), this);
   refresh_rate_property_->setMin(1.0F);
+
+  qos_root_property_ = new rviz_common::properties::Property(
+    "QoS", QVariant(), "ROS subscription quality-of-service settings.", this);
+  qos_reliability_property_ = new rviz_common::properties::EnumProperty(
+    "Reliability", QString::fromStdString(qosReliabilityName(QoSReliability::Reliable)),
+    "Subscription reliability policy.",
+    qos_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addQoSReliabilityOptions(qos_reliability_property_);
+  qos_durability_property_ = new rviz_common::properties::EnumProperty(
+    "Durability", QString::fromStdString(qosDurabilityName(QoSDurability::Volatile)),
+    "Subscription durability policy.",
+    qos_root_property_, SLOT(onConfigPropertyChanged()), this);
+  addQoSDurabilityOptions(qos_durability_property_);
+  qos_depth_property_ = new rviz_common::properties::IntProperty(
+    "Depth", 10, "Keep-last queue depth for subscriptions.",
+    qos_root_property_, SLOT(onConfigPropertyChanged()), this, 1, 100000);
 
   x_axis_root_property_ = new rviz_common::properties::Property(
     "X Axis", QVariant(), "X-axis scale settings for XY mode.", this);
@@ -1300,6 +1416,14 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
     xyHistoryModeFromName(xy_history_mode_property_->getStdString()) :
     XYHistoryMode::RollingTimeWindow;
 
+  config.qos.reliability = qos_reliability_property_ ?
+    qosReliabilityFromName(qos_reliability_property_->getStdString()) :
+    QoSReliability::Reliable;
+  config.qos.durability = qos_durability_property_ ?
+    qosDurabilityFromName(qos_durability_property_->getStdString()) :
+    QoSDurability::Volatile;
+  config.qos.depth = qos_depth_property_ ? qos_depth_property_->getInt() : 10;
+
   config.x_axis.mode = config.plot_mode == PlotMode::XY ? XAxisMode::Field : XAxisMode::Time;
   config.x_axis.scale_mode = x_auto_scale_property_->getBool() ?
     AxisScaleMode::Auto : AxisScaleMode::Fixed;
@@ -1705,6 +1829,7 @@ void Plot2DDisplay::resolveAndSubscribe_()
 {
   const TopicTypeMap topics = topicNamesAndTypes_();
   const Plot2DConfig config = configFromProperties_();
+  const rclcpp::QoS qos = qosProfileFromConfig(config.qos);
 
   Plot2DControllerState state;
   {
@@ -1743,7 +1868,7 @@ void Plot2DDisplay::resolveAndSubscribe_()
         subscription_factory_.create_generic_subscription(
           topic,
           type,
-          qos_profile_,
+          qos,
           [this, topic](std::shared_ptr<rclcpp::SerializedMessage> message)
           {
             onSerializedMessage_(topic, std::move(message));

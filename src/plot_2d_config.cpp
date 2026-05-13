@@ -56,6 +56,13 @@ void TimeConfig::repair()
   }
 }
 
+void QoSConfig::repair()
+{
+  if (depth < 1) {
+    depth = 10;
+  }
+}
+
 void LayoutConfig::repair()
 {
   width = std::max(width, 120);
@@ -125,6 +132,7 @@ void Plot2DConfig::repair()
   y_axis.repairFixedRange();
   x_axis.repairFixedRange();
   time.repair();
+  qos.repair();
   layout.repair();
 }
 

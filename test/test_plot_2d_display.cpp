@@ -21,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -245,6 +246,8 @@ using rviz_2d_plot_plugin::PlotControllerStatus;
 using rviz_2d_plot_plugin::PlotMode;
 using rviz_2d_plot_plugin::Plot2DDisplay;
 using rviz_2d_plot_plugin::Plot2DDisplayTestAccessor;
+using rviz_2d_plot_plugin::QoSDurability;
+using rviz_2d_plot_plugin::QoSReliability;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
 using rviz_2d_plot_plugin::VerticalAlignment;
@@ -456,6 +459,12 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(time, "XY History Mode"));
   EXPECT_TRUE(findChild(time, "XY History Mode")->getHidden());
   EXPECT_NE(nullptr, findChild(time, "Refresh Rate"));
+
+  auto * qos = findChild(&display, "QoS");
+  ASSERT_NE(nullptr, qos);
+  EXPECT_NE(nullptr, findChild(qos, "Reliability"));
+  EXPECT_NE(nullptr, findChild(qos, "Durability"));
+  EXPECT_NE(nullptr, findChild(qos, "Depth"));
 
   auto * x_axis = Plot2DDisplayTestAccessor::xAxisRoot(display);
   EXPECT_TRUE(x_axis->getHidden());
@@ -754,6 +763,11 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   time_source->setValue("Message Header Stamp");
   findChild(Plot2DDisplayTestAccessor::timeRoot(display), "XY History Mode")->setValue(
     "All Samples");
+  auto * qos = findChild(&display, "QoS");
+  ASSERT_NE(nullptr, qos);
+  findChild(qos, "Reliability")->setValue("Best Effort");
+  findChild(qos, "Durability")->setValue("Transient Local");
+  findChild(qos, "Depth")->setValue(42);
   findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale")->setValue(false);
   findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "X Min")->setValue(-4.0);
   findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "X Max")->setValue(4.0);
@@ -805,6 +819,9 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.time.refresh_rate_hz, 12.0);
   EXPECT_EQ(config.time.source, TimeSource::HeaderStamp);
   EXPECT_EQ(config.time.xy_history_mode, XYHistoryMode::AllSamples);
+  EXPECT_EQ(config.qos.reliability, QoSReliability::BestEffort);
+  EXPECT_EQ(config.qos.durability, QoSDurability::TransientLocal);
+  EXPECT_EQ(config.qos.depth, 42);
   EXPECT_EQ(config.plot_mode, PlotMode::XY);
   EXPECT_EQ(config.x_axis.mode, XAxisMode::Field);
   EXPECT_EQ(config.x_axis.scale_mode, AxisScaleMode::Fixed);
@@ -1317,6 +1334,43 @@ TEST(Plot2DDisplay, ResolvedTopicCreatesGenericSubscription)
   ASSERT_EQ(state.series.size(), 1U);
   EXPECT_EQ(state.series[0].topic, "/value");
   EXPECT_EQ(state.series[0].type, "std_msgs/msg/Float64");
+}
+
+TEST(Plot2DDisplay, UsesConfiguredQosForGenericSubscriptions)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  auto * qos = findChild(&display, "QoS");
+  ASSERT_NE(nullptr, qos);
+  findChild(qos, "Reliability")->setValue("Best Effort");
+  findChild(qos, "Durability")->setValue("Transient Local");
+  findChild(qos, "Depth")->setValue(7);
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  std::optional<rmw_qos_profile_t> received_qos;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&received_qos](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS qos,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>)
+    {
+      received_qos = qos.get_rmw_qos_profile();
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  ASSERT_TRUE(received_qos.has_value());
+  EXPECT_EQ(received_qos->reliability, RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+  EXPECT_EQ(received_qos->durability, RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL);
+  EXPECT_EQ(received_qos->depth, 7U);
 }
 
 TEST(Plot2DDisplay, SubscriptionFactoryRunsAfterControllerLockIsReleased)
