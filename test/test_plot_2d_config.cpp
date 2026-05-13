@@ -22,6 +22,8 @@ using rviz_2d_plot_plugin::VerticalAlignment;
 using rviz_2d_plot_plugin::XAxisMode;
 using rviz_2d_plot_plugin::XYAxisScaleMode;
 using rviz_2d_plot_plugin::XYHistoryMode;
+using rviz_2d_plot_plugin::kMaximumLineWidth;
+using rviz_2d_plot_plugin::kMinimumLineWidth;
 
 TEST(Plot2DConfig, DefaultsDescribeOneUsableTimeSeries)
 {
@@ -132,10 +134,30 @@ TEST(Plot2DConfig, RepairsInvalidSeriesAppearanceValues)
   EXPECT_EQ(config.series.front().color.red, 0);
   EXPECT_EQ(config.series.front().color.green, 255);
   EXPECT_EQ(config.series.front().color.blue, 120);
-  EXPECT_DOUBLE_EQ(config.series.front().line_width, 1.0);
+  EXPECT_DOUBLE_EQ(config.series.front().line_width, kMinimumLineWidth);
   EXPECT_DOUBLE_EQ(config.series.front().line_alpha, 1.0);
   EXPECT_DOUBLE_EQ(config.series.front().value_scale, 1.0);
   EXPECT_DOUBLE_EQ(config.series.front().value_offset, 0.0);
+}
+
+TEST(Plot2DConfig, AllowsFractionalSeriesLineWidths)
+{
+  Plot2DConfig config;
+  config.series.front().line_width = 0.5;
+
+  config.repair();
+
+  EXPECT_DOUBLE_EQ(config.series.front().line_width, 0.5);
+}
+
+TEST(Plot2DConfig, ClampsExcessiveSeriesLineWidths)
+{
+  Plot2DConfig config;
+  config.series.front().line_width = 200.0;
+
+  config.repair();
+
+  EXPECT_DOUBLE_EQ(config.series.front().line_width, kMaximumLineWidth);
 }
 
 TEST(Plot2DConfig, RepairsInvalidReferenceAppearanceValues)
@@ -154,6 +176,28 @@ TEST(Plot2DConfig, RepairsInvalidReferenceAppearanceValues)
   EXPECT_EQ(config.references.front().color.red, 255);
   EXPECT_EQ(config.references.front().color.green, 0);
   EXPECT_DOUBLE_EQ(config.references.front().alpha, 1.0);
-  EXPECT_DOUBLE_EQ(config.references.front().line_width, 1.0);
+  EXPECT_DOUBLE_EQ(config.references.front().line_width, kMinimumLineWidth);
   EXPECT_DOUBLE_EQ(config.references.front().tolerance, 0.0);
+}
+
+TEST(Plot2DConfig, AllowsFractionalReferenceLineWidths)
+{
+  Plot2DConfig config;
+  config.references.push_back(rviz_2d_plot_plugin::ReferenceConfig{});
+  config.references.front().line_width = 0.25;
+
+  config.repair();
+
+  EXPECT_DOUBLE_EQ(config.references.front().line_width, 0.25);
+}
+
+TEST(Plot2DConfig, ClampsExcessiveReferenceLineWidths)
+{
+  Plot2DConfig config;
+  config.references.push_back(rviz_2d_plot_plugin::ReferenceConfig{});
+  config.references.front().line_width = 200.0;
+
+  config.repair();
+
+  EXPECT_DOUBLE_EQ(config.references.front().line_width, kMaximumLineWidth);
 }

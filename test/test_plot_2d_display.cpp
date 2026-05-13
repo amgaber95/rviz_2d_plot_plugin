@@ -741,7 +741,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(series, "Label")->setValue("Odom Position");
   findChild(series, "Unit")->setValue("m");
   findChild(series, "Color")->setValue(QColor(255, 80, 20));
-  findChild(series, "Line Width")->setValue(3.5);
+  findChild(series, "Line Width")->setValue(0.5);
   findChild(series, "Line Alpha")->setValue(0.45);
   findChild(series, "Line Style")->setValue("Dash");
   findChild(series, "Plot Style")->setValue("Step");
@@ -771,7 +771,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(reference, "Label")->setValue("Limit");
   findChild(reference, "Color")->setValue(QColor(255, 180, 60));
   findChild(reference, "Alpha")->setValue(0.6);
-  findChild(reference, "Line Width")->setValue(1.5);
+  findChild(reference, "Line Width")->setValue(0.25);
   findChild(reference, "Line Style")->setValue("Dot");
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Width")->setValue(420);
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Height")->setValue(180);
@@ -795,7 +795,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.series[0].color.red, 255);
   EXPECT_EQ(config.series[0].color.green, 80);
   EXPECT_EQ(config.series[0].color.blue, 20);
-  EXPECT_DOUBLE_EQ(config.series[0].line_width, 3.5);
+  EXPECT_DOUBLE_EQ(config.series[0].line_width, 0.5);
   EXPECT_NEAR(config.series[0].line_alpha, 0.45, 1e-6);
   EXPECT_EQ(config.series[0].line_style, rviz_2d_plot_plugin::LineStyle::Dash);
   EXPECT_EQ(config.series[0].plot_style, rviz_2d_plot_plugin::PlotStyle::Step);
@@ -823,7 +823,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.references[0].color.green, 180);
   EXPECT_EQ(config.references[0].color.blue, 60);
   EXPECT_NEAR(config.references[0].alpha, 0.6, 1e-6);
-  EXPECT_DOUBLE_EQ(config.references[0].line_width, 1.5);
+  EXPECT_DOUBLE_EQ(config.references[0].line_width, 0.25);
   EXPECT_EQ(config.references[0].line_style, rviz_2d_plot_plugin::LineStyle::Dot);
   EXPECT_EQ(config.layout.width, 420);
   EXPECT_EQ(config.layout.height, 180);

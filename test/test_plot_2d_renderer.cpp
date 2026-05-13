@@ -426,6 +426,30 @@ TEST(Plot2DRenderer, AppliesConfiguredLineWidth)
     countPixelsCloseTo(thin_image, QColor(250, 40, 40)) * 2);
 }
 
+TEST(Plot2DRenderer, SupportsSubpixelSeriesLineWidth)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableSeries subpixel = horizontalSeries();
+  subpixel.line_width = 0.5;
+  RenderableSeries single_pixel = horizontalSeries();
+  single_pixel.line_width = 1.0;
+
+  const QImage subpixel_image = renderer.render(settings, {subpixel});
+  const QImage single_pixel_image = renderer.render(settings, {single_pixel});
+
+  EXPECT_GT(countDifferentPixels(subpixel_image, single_pixel_image), 0);
+}
+
 TEST(Plot2DRenderer, AppliesConfiguredDashLineStyle)
 {
   ensureQtApplication();
@@ -527,6 +551,32 @@ TEST(Plot2DRenderer, DrawsEnabledReferenceLines)
   const QImage image = renderer.render(settings, {}, {reference});
 
   EXPECT_GT(countPixelsCloseTo(image, QColor(255, 180, 60)), 0);
+}
+
+TEST(Plot2DRenderer, SupportsSubpixelReferenceLineWidth)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+
+  RenderableReference subpixel;
+  subpixel.value = 0.0;
+  subpixel.color = QColor(255, 180, 60);
+  subpixel.line_width = 0.5;
+  RenderableReference single_pixel = subpixel;
+  single_pixel.line_width = 1.0;
+
+  const QImage subpixel_image = renderer.render(settings, {}, {subpixel});
+  const QImage single_pixel_image = renderer.render(settings, {}, {single_pixel});
+
+  EXPECT_GT(countDifferentPixels(subpixel_image, single_pixel_image), 0);
 }
 
 TEST(Plot2DRenderer, DrawsReferenceToleranceBands)

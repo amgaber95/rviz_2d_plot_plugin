@@ -72,9 +72,10 @@ void SeriesColor::repair()
 void SeriesConfig::repair()
 {
   color.repair();
-  if (!std::isfinite(line_width) || line_width < 1.0) {
-    line_width = 1.0;
+  if (!std::isfinite(line_width)) {
+    line_width = 2.0;
   }
+  line_width = std::clamp(line_width, kMinimumLineWidth, kMaximumLineWidth);
   if (!std::isfinite(line_alpha)) {
     line_alpha = 1.0;
   }
@@ -100,9 +101,10 @@ void ReferenceConfig::repair()
     alpha = 1.0;
   }
   alpha = std::clamp(alpha, 0.0, 1.0);
-  if (!std::isfinite(line_width) || line_width < 1.0) {
-    line_width = 1.0;
+  if (!std::isfinite(line_width)) {
+    line_width = 1.2;
   }
+  line_width = std::clamp(line_width, kMinimumLineWidth, kMaximumLineWidth);
 }
 
 void Plot2DConfig::repair()

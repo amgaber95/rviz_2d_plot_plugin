@@ -1416,7 +1416,8 @@ void Plot2DDisplay::rebuildSeriesProperties_(
     properties.line_width = new rviz_common::properties::FloatProperty(
       "Line Width", value.line_width, "Series line width in pixels.",
       properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    properties.line_width->setMin(1.0F);
+    properties.line_width->setMin(static_cast<float>(kMinimumLineWidth));
+    properties.line_width->setMax(static_cast<float>(kMaximumLineWidth));
     properties.line_alpha = new rviz_common::properties::FloatProperty(
       "Line Alpha", value.line_alpha, "Series line opacity from 0 to 1.",
       properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
@@ -1509,7 +1510,8 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     properties.line_width = new rviz_common::properties::FloatProperty(
       "Line Width", value.line_width, "Reference line width in pixels.",
       properties.root, SLOT(onReferencePropertyChanged()), this);
-    properties.line_width->setMin(1.0F);
+    properties.line_width->setMin(static_cast<float>(kMinimumLineWidth));
+    properties.line_width->setMax(static_cast<float>(kMaximumLineWidth));
     properties.line_style = new rviz_common::properties::EnumProperty(
       "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
       "Reference line pattern.", properties.root, SLOT(onReferencePropertyChanged()), this);

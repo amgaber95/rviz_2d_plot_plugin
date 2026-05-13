@@ -13,6 +13,9 @@
 namespace rviz_2d_plot_plugin
 {
 
+constexpr double kMinimumLineWidth = 0.1;
+constexpr double kMaximumLineWidth = 20.0;
+
 enum class LineStyle
 {
   Solid,

@@ -28,6 +28,14 @@ namespace
 constexpr int kMinimumWidth = 120;
 constexpr int kMinimumHeight = 80;
 
+double repairedLineWidth(const double line_width)
+{
+  if (!std::isfinite(line_width)) {
+    return 1.0;
+  }
+  return std::clamp(line_width, kMinimumLineWidth, kMaximumLineWidth);
+}
+
 double majorTickStep(const std::vector<double> & ticks)
 {
   if (ticks.size() < 2) {
@@ -282,7 +290,7 @@ void drawSeries(
 
   QPen pen(
     series.color,
-    std::max(1.0, series.line_width),
+    repairedLineWidth(series.line_width),
     qtPenStyle(series.line_style),
     Qt::RoundCap,
     Qt::RoundJoin);
@@ -304,7 +312,7 @@ void drawSeries(
 
   if (series.plot_style == PlotStyle::Points) {
     painter.setBrush(series.color);
-    const double radius = std::max(2.0, series.line_width * 1.5);
+    const double radius = std::max(2.0, repairedLineWidth(series.line_width) * 1.5);
     for (const QPointF & point : points) {
       painter.drawEllipse(point, radius, radius);
     }
@@ -359,7 +367,7 @@ void drawReferences(
       painter.setPen(
         QPen(
           reference.color,
-          std::max(1.0, reference.line_width),
+          repairedLineWidth(reference.line_width),
           qtPenStyle(reference.line_style),
           Qt::RoundCap,
           Qt::RoundJoin));
