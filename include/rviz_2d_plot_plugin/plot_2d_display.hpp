@@ -44,6 +44,7 @@ namespace rviz_2d_plot_plugin
 
 class OverlayBackend;
 class Plot2DDisplayTestAccessor;
+class Plot2DSubscriptionManager;
 
 /// RViz display that manages properties, ROS subscriptions, and plot overlays.
 class Plot2DDisplay : public rviz_common::Display
@@ -84,21 +85,9 @@ private Q_SLOTS:
     rviz_common::properties::EditableEnumProperty * property);
 
 private:
-  using SerializedMessageCallback =
-    std::function<void (std::shared_ptr<rclcpp::SerializedMessage>)>;
-
   struct RosGraphOps
   {
     std::function<TopicTypeMap()> get_topic_names_and_types;
-  };
-
-  struct SubscriptionFactory
-  {
-    std::function<rclcpp::GenericSubscription::SharedPtr(
-        const std::string &,
-        const std::string &,
-        rclcpp::QoS,
-        SerializedMessageCallback)> create_generic_subscription;
   };
 
   struct SeriesPropertySet
@@ -256,9 +245,8 @@ private:
   std::unique_ptr<OverlayBackend> overlay_backend_;
   std::function<std::unique_ptr<OverlayBackend>(std::string)> overlay_backend_factory_;
   rclcpp::Node::SharedPtr node_;
-  std::vector<rclcpp::GenericSubscription::SharedPtr> subscriptions_;
   RosGraphOps ros_graph_ops_;
-  SubscriptionFactory subscription_factory_;
+  std::unique_ptr<Plot2DSubscriptionManager> subscription_manager_;
   Plot2DController controller_;
   Plot2DRenderer renderer_;
   double retry_elapsed_seconds_{0.0};

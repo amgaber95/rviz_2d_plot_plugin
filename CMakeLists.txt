@@ -35,9 +35,11 @@ add_library(${PROJECT_NAME} SHARED
   src/plot_2d_config.cpp
   src/plot_2d_controller.cpp
   src/plot_2d_display.cpp
+  src/plot_2d_display_options.cpp
   src/plot_2d_renderer.cpp
   src/plot_path_resolver.cpp
   src/plot_range.cpp
+  src/plot_2d_subscription_manager.cpp
   src/plot_value_formatter.cpp
   src/sample_buffer.cpp
   src/tick_generator.cpp

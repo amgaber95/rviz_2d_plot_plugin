@@ -42,6 +42,7 @@
 #include <rviz_common/properties/string_property.hpp>
 
 #include "overlay_backend.hpp"
+#include "plot_2d_subscription_manager.hpp"
 
 #include "rviz_2d_plot_plugin/plot_2d_config.hpp"
 #include "rviz_2d_plot_plugin/plot_2d_controller.hpp"
@@ -136,7 +137,7 @@ public:
       rclcpp::QoS,
       std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)>)> factory)
   {
-    display.subscription_factory_.create_generic_subscription = std::move(factory);
+    display.subscription_manager_->setFactory(std::move(factory));
   }
 
   static void setOverlayBackendFactory(

@@ -7,17 +7,13 @@
 #include "rviz_2d_plot_plugin/plot_2d_display.hpp"
 
 #include <QColor>
-#include <QComboBox>
-#include <QCompleter>
 #include <QImage>
 #include <QObject>
 #include <QSignalBlocker>
-#include <QStyleOptionViewItem>
 #include <QTimer>
 #include <QVariant>
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -35,157 +31,18 @@
 #include <rviz_common/properties/float_property.hpp>
 #include <rviz_common/properties/int_property.hpp>
 #include <rviz_common/properties/property.hpp>
-#include <rviz_common/properties/property_tree_model.hpp>
 #include <rviz_common/properties/status_property.hpp>
 #include <rviz_common/properties/string_property.hpp>
 
 #include "overlay_backend.hpp"
+#include "plot_2d_display_options.hpp"
+#include "plot_2d_property_helpers.hpp"
+#include "plot_2d_subscription_manager.hpp"
 
 namespace rviz_2d_plot_plugin
 {
 namespace
 {
-
-class ContainsFilterEditableEnumProperty
-  : public rviz_common::properties::EditableEnumProperty
-{
-public:
-  using rviz_common::properties::EditableEnumProperty::EditableEnumProperty;
-
-  QWidget * createEditor(
-    QWidget * parent,
-    const QStyleOptionViewItem & option) override
-  {
-    QWidget * editor =
-      rviz_common::properties::EditableEnumProperty::createEditor(parent, option);
-    auto * combo_box = qobject_cast<QComboBox *>(editor);
-    if (combo_box && combo_box->completer()) {
-      combo_box->completer()->setCompletionMode(QCompleter::PopupCompletion);
-      combo_box->completer()->setCaseSensitivity(Qt::CaseInsensitive);
-      combo_box->completer()->setFilterMode(Qt::MatchContains);
-    }
-    return editor;
-  }
-};
-
-class ListItemBoolProperty : public rviz_common::properties::BoolProperty
-{
-public:
-  using rviz_common::properties::BoolProperty::BoolProperty;
-
-  void setDisplayLabel(const QString & label)
-  {
-    if (display_label_ == label) {
-      return;
-    }
-    display_label_ = label;
-    if (model_) {
-      model_->emitDataChanged(this);
-    }
-  }
-
-  QVariant getViewData(const int column, const int role) const override
-  {
-    if (column == 0 && role == Qt::DisplayRole && !display_label_.isEmpty()) {
-      return display_label_;
-    }
-    return rviz_common::properties::BoolProperty::getViewData(column, role);
-  }
-
-  Qt::ItemFlags getViewFlags(const int column) const override
-  {
-    Qt::ItemFlags flags = rviz_common::properties::BoolProperty::getViewFlags(column);
-    if (column == 0) {
-      flags |= Qt::ItemIsDragEnabled;
-    }
-    return flags;
-  }
-
-private:
-  QString display_label_;
-};
-
-class ReorderableListProperty : public rviz_common::properties::Property
-{
-public:
-  using rviz_common::properties::Property::Property;
-
-  void setFixedChildCount(const int count)
-  {
-    fixed_child_count_ = std::max(0, count);
-  }
-
-  int fixedChildCount() const
-  {
-    return fixed_child_count_;
-  }
-
-  Qt::ItemFlags getViewFlags(const int column) const override
-  {
-    Qt::ItemFlags flags = rviz_common::properties::Property::getViewFlags(column);
-    if (column == 0) {
-      flags |= Qt::ItemIsDropEnabled;
-    }
-    return flags;
-  }
-
-  void addChild(rviz_common::properties::Property * child, int index = -1) override
-  {
-    if (dynamic_cast<ListItemBoolProperty *>(child) && index >= 0) {
-      index = std::max(fixed_child_count_, index);
-    }
-    rviz_common::properties::Property::addChild(child, index);
-  }
-
-private:
-  int fixed_child_count_{0};
-};
-
-template<typename PropertySet>
-bool syncPropertyOrder(
-  rviz_common::properties::Property * root,
-  const int fixed_child_count,
-  std::vector<PropertySet> & properties,
-  const QString & row_name_prefix)
-{
-  if (!root) {
-    return false;
-  }
-
-  std::vector<PropertySet> ordered;
-  ordered.reserve(properties.size());
-  for (int i = fixed_child_count; i < root->numChildren(); ++i) {
-    rviz_common::properties::Property * child = root->childAt(i);
-    const auto it = std::find_if(
-      properties.begin(), properties.end(),
-      [child](const PropertySet & item) {
-        return item.root == child;
-      });
-    if (it != properties.end()) {
-      ordered.push_back(*it);
-    }
-  }
-
-  if (ordered.size() != properties.size()) {
-    return false;
-  }
-
-  bool changed = false;
-  for (std::size_t i = 0; i < ordered.size(); ++i) {
-    changed = changed || ordered[i].root != properties[i].root;
-  }
-  if (!changed) {
-    return false;
-  }
-
-  properties = std::move(ordered);
-  for (std::size_t i = 0; i < properties.size(); ++i) {
-    if (properties[i].root) {
-      properties[i].root->setName(row_name_prefix + QString::number(static_cast<int>(i) + 1));
-    }
-  }
-  return true;
-}
 
 rviz_common::properties::StatusProperty::Level statusLevel(
   const PlotControllerStatus status)
@@ -220,554 +77,11 @@ std::string statusText(const Plot2DControllerState & state)
   return "Waiting for a topic and field selection";
 }
 
-SeriesColor defaultSeriesColor(const std::size_t index)
-{
-  static const std::vector<SeriesColor> palette{
-    SeriesColor{80, 170, 255},
-    SeriesColor{80, 220, 130},
-    SeriesColor{255, 170, 60},
-    SeriesColor{210, 130, 255},
-    SeriesColor{255, 90, 90},
-    SeriesColor{120, 220, 255},
-    SeriesColor{230, 230, 90},
-    SeriesColor{160, 160, 255},
-  };
-  return palette[index % palette.size()];
-}
-
-QColor toQColor(const SeriesColor & color)
-{
-  return QColor(color.red, color.green, color.blue);
-}
-
-SeriesColor toSeriesColor(const QColor & color)
-{
-  return SeriesColor{color.red(), color.green(), color.blue()};
-}
-
-std::string lineStyleName(const LineStyle style)
-{
-  switch (style) {
-    case LineStyle::Solid:
-      return "Solid";
-    case LineStyle::Dash:
-      return "Dash";
-    case LineStyle::Dot:
-      return "Dot";
-    case LineStyle::DashDot:
-      return "Dash Dot";
-  }
-  return "Solid";
-}
-
-LineStyle lineStyleFromName(const std::string & name)
-{
-  if (name == "Dash") {
-    return LineStyle::Dash;
-  }
-  if (name == "Dot") {
-    return LineStyle::Dot;
-  }
-  if (name == "Dash Dot") {
-    return LineStyle::DashDot;
-  }
-  return LineStyle::Solid;
-}
-
-void addLineStyleOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(lineStyleName(LineStyle::Solid));
-  property->addOptionStd(lineStyleName(LineStyle::Dash));
-  property->addOptionStd(lineStyleName(LineStyle::Dot));
-  property->addOptionStd(lineStyleName(LineStyle::DashDot));
-}
-
-std::string plotStyleName(const PlotStyle style)
-{
-  switch (style) {
-    case PlotStyle::Line:
-      return "Line";
-    case PlotStyle::Step:
-      return "Step";
-    case PlotStyle::Points:
-      return "Points";
-  }
-  return "Line";
-}
-
-PlotStyle plotStyleFromName(const std::string & name)
-{
-  if (name == "Step") {
-    return PlotStyle::Step;
-  }
-  if (name == "Points") {
-    return PlotStyle::Points;
-  }
-  return PlotStyle::Line;
-}
-
-void addPlotStyleOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(plotStyleName(PlotStyle::Line));
-  property->addOptionStd(plotStyleName(PlotStyle::Step));
-  property->addOptionStd(plotStyleName(PlotStyle::Points));
-}
-
-std::string timeSourceName(const TimeSource source)
-{
-  switch (source) {
-    case TimeSource::ReceiveTime:
-      return "Receive Time";
-    case TimeSource::HeaderStamp:
-      return "Message Header Stamp";
-  }
-  return "Receive Time";
-}
-
-TimeSource timeSourceFromName(const std::string & name)
-{
-  if (name == "Message Header Stamp") {
-    return TimeSource::HeaderStamp;
-  }
-  return TimeSource::ReceiveTime;
-}
-
-void addTimeSourceOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(timeSourceName(TimeSource::ReceiveTime));
-  property->addOptionStd(timeSourceName(TimeSource::HeaderStamp));
-}
-
-std::string qosReliabilityName(const QoSReliability reliability)
-{
-  switch (reliability) {
-    case QoSReliability::SystemDefault:
-      return "System Default";
-    case QoSReliability::Reliable:
-      return "Reliable";
-    case QoSReliability::BestEffort:
-      return "Best Effort";
-  }
-  return "Reliable";
-}
-
-QoSReliability qosReliabilityFromName(const std::string & name)
-{
-  if (name == "System Default") {
-    return QoSReliability::SystemDefault;
-  }
-  if (name == "Best Effort") {
-    return QoSReliability::BestEffort;
-  }
-  return QoSReliability::Reliable;
-}
-
-void addQoSReliabilityOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(qosReliabilityName(QoSReliability::SystemDefault));
-  property->addOptionStd(qosReliabilityName(QoSReliability::Reliable));
-  property->addOptionStd(qosReliabilityName(QoSReliability::BestEffort));
-}
-
-std::string qosDurabilityName(const QoSDurability durability)
-{
-  switch (durability) {
-    case QoSDurability::SystemDefault:
-      return "System Default";
-    case QoSDurability::Volatile:
-      return "Volatile";
-    case QoSDurability::TransientLocal:
-      return "Transient Local";
-  }
-  return "Volatile";
-}
-
-QoSDurability qosDurabilityFromName(const std::string & name)
-{
-  if (name == "System Default") {
-    return QoSDurability::SystemDefault;
-  }
-  if (name == "Transient Local") {
-    return QoSDurability::TransientLocal;
-  }
-  return QoSDurability::Volatile;
-}
-
-void addQoSDurabilityOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(qosDurabilityName(QoSDurability::SystemDefault));
-  property->addOptionStd(qosDurabilityName(QoSDurability::Volatile));
-  property->addOptionStd(qosDurabilityName(QoSDurability::TransientLocal));
-}
-
-rclcpp::QoS qosProfileFromConfig(QoSConfig config)
-{
-  config.repair();
-  rclcpp::QoS qos(static_cast<std::size_t>(config.depth));
-
-  switch (config.reliability) {
-    case QoSReliability::SystemDefault:
-      qos.reliability(rclcpp::ReliabilityPolicy::SystemDefault);
-      break;
-    case QoSReliability::Reliable:
-      qos.reliable();
-      break;
-    case QoSReliability::BestEffort:
-      qos.best_effort();
-      break;
-  }
-
-  switch (config.durability) {
-    case QoSDurability::SystemDefault:
-      qos.durability(rclcpp::DurabilityPolicy::SystemDefault);
-      break;
-    case QoSDurability::Volatile:
-      qos.durability_volatile();
-      break;
-    case QoSDurability::TransientLocal:
-      qos.transient_local();
-      break;
-  }
-
-  return qos;
-}
-
-std::string plotModeName(const PlotMode mode)
-{
-  switch (mode) {
-    case PlotMode::TimeSeries:
-      return "Time Series";
-    case PlotMode::XY:
-      return "XY";
-  }
-  return "Time Series";
-}
-
-PlotMode plotModeFromName(const std::string & name)
-{
-  if (name == "XY") {
-    return PlotMode::XY;
-  }
-  return PlotMode::TimeSeries;
-}
-
-std::string seriesDefaultLabel(const SeriesConfig & series, const PlotMode plot_mode)
-{
-  if (series.topic.empty()) {
-    return {};
-  }
-  if (plot_mode == PlotMode::XY || series.field.empty()) {
-    return series.topic;
-  }
-
-  const std::string separator = series.field.front() == '/' ? "" : "/";
-  return series.topic + separator + series.field;
-}
-
-void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(plotModeName(PlotMode::TimeSeries));
-  property->addOptionStd(plotModeName(PlotMode::XY));
-}
-
-std::string xyHistoryModeName(const XYHistoryMode mode)
-{
-  switch (mode) {
-    case XYHistoryMode::RollingTimeWindow:
-      return "Rolling Time Window";
-    case XYHistoryMode::AllSamples:
-      return "All Samples";
-  }
-  return "Rolling Time Window";
-}
-
-XYHistoryMode xyHistoryModeFromName(const std::string & name)
-{
-  if (name == "All Samples") {
-    return XYHistoryMode::AllSamples;
-  }
-  return XYHistoryMode::RollingTimeWindow;
-}
-
-void addXYHistoryModeOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(xyHistoryModeName(XYHistoryMode::RollingTimeWindow));
-  property->addOptionStd(xyHistoryModeName(XYHistoryMode::AllSamples));
-}
-
-std::string xyAxisScaleModeName(const XYAxisScaleMode mode)
-{
-  switch (mode) {
-    case XYAxisScaleMode::Independent:
-      return "Independent";
-    case XYAxisScaleMode::Equal:
-      return "1:1";
-  }
-  return "Independent";
-}
-
-XYAxisScaleMode xyAxisScaleModeFromName(const std::string & name)
-{
-  if (name == "1:1") {
-    return XYAxisScaleMode::Equal;
-  }
-  return XYAxisScaleMode::Independent;
-}
-
-void addXYAxisScaleModeOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(xyAxisScaleModeName(XYAxisScaleMode::Independent));
-  property->addOptionStd(xyAxisScaleModeName(XYAxisScaleMode::Equal));
-}
-
-std::string horizontalAlignmentName(const HorizontalAlignment alignment)
-{
-  switch (alignment) {
-    case HorizontalAlignment::Left:
-      return "Left";
-    case HorizontalAlignment::Center:
-      return "Center";
-    case HorizontalAlignment::Right:
-      return "Right";
-  }
-  return "Right";
-}
-
-HorizontalAlignment horizontalAlignmentFromName(const std::string & name)
-{
-  if (name == "Left") {
-    return HorizontalAlignment::Left;
-  }
-  if (name == "Center") {
-    return HorizontalAlignment::Center;
-  }
-  return HorizontalAlignment::Right;
-}
-
-void addHorizontalAlignmentOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(horizontalAlignmentName(HorizontalAlignment::Left));
-  property->addOptionStd(horizontalAlignmentName(HorizontalAlignment::Center));
-  property->addOptionStd(horizontalAlignmentName(HorizontalAlignment::Right));
-}
-
-std::string verticalAlignmentName(const VerticalAlignment alignment)
-{
-  switch (alignment) {
-    case VerticalAlignment::Top:
-      return "Top";
-    case VerticalAlignment::Center:
-      return "Center";
-    case VerticalAlignment::Bottom:
-      return "Bottom";
-  }
-  return "Top";
-}
-
-VerticalAlignment verticalAlignmentFromName(const std::string & name)
-{
-  if (name == "Center") {
-    return VerticalAlignment::Center;
-  }
-  if (name == "Bottom") {
-    return VerticalAlignment::Bottom;
-  }
-  return VerticalAlignment::Top;
-}
-
-void addVerticalAlignmentOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(verticalAlignmentName(VerticalAlignment::Top));
-  property->addOptionStd(verticalAlignmentName(VerticalAlignment::Center));
-  property->addOptionStd(verticalAlignmentName(VerticalAlignment::Bottom));
-}
-
-OverlayHorizontalAlignment toOverlayHorizontalAlignment(
-  const HorizontalAlignment alignment)
-{
-  switch (alignment) {
-    case HorizontalAlignment::Left:
-      return OverlayHorizontalAlignment::Left;
-    case HorizontalAlignment::Center:
-      return OverlayHorizontalAlignment::Center;
-    case HorizontalAlignment::Right:
-      return OverlayHorizontalAlignment::Right;
-  }
-  return OverlayHorizontalAlignment::Right;
-}
-
-OverlayVerticalAlignment toOverlayVerticalAlignment(
-  const VerticalAlignment alignment)
-{
-  switch (alignment) {
-    case VerticalAlignment::Top:
-      return OverlayVerticalAlignment::Top;
-    case VerticalAlignment::Center:
-      return OverlayVerticalAlignment::Center;
-    case VerticalAlignment::Bottom:
-      return OverlayVerticalAlignment::Bottom;
-  }
-  return OverlayVerticalAlignment::Top;
-}
-
-std::string legendPositionName(const LegendPosition position)
-{
-  switch (position) {
-    case LegendPosition::TopLeft:
-      return "Top Left";
-    case LegendPosition::TopRight:
-      return "Top Right";
-    case LegendPosition::BottomLeft:
-      return "Bottom Left";
-    case LegendPosition::BottomRight:
-      return "Bottom Right";
-  }
-  return "Top Left";
-}
-
-LegendPosition legendPositionFromName(const std::string & name)
-{
-  if (name == "Top Right") {
-    return LegendPosition::TopRight;
-  }
-  if (name == "Bottom Left") {
-    return LegendPosition::BottomLeft;
-  }
-  if (name == "Bottom Right") {
-    return LegendPosition::BottomRight;
-  }
-  return LegendPosition::TopLeft;
-}
-
-void addLegendPositionOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(legendPositionName(LegendPosition::TopLeft));
-  property->addOptionStd(legendPositionName(LegendPosition::TopRight));
-  property->addOptionStd(legendPositionName(LegendPosition::BottomLeft));
-  property->addOptionStd(legendPositionName(LegendPosition::BottomRight));
-}
-
-constexpr const char * kNoReferencePreset = "None";
-constexpr const char * kReferenceValuePropertyName = "Y Value";
-constexpr int kReferenceFixedPropertyCount = 5;
-
-void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(kNoReferencePreset);
-  property->addOptionStd("Zero Line");
-  property->addOptionStd("Target Value");
-  property->addOptionStd("Upper Limit");
-  property->addOptionStd("Lower Limit");
-  property->addOptionStd("Tolerance Band");
-}
-
-std::vector<ReferenceConfig> referencePresetFromName(
-  const std::string & name,
-  const double preset_value,
-  const double preset_tolerance)
-{
-  const double value = std::isfinite(preset_value) ? preset_value : 0.0;
-  const double tolerance = std::isfinite(preset_tolerance) ? std::abs(preset_tolerance) : 0.0;
-
-  if (name == "Zero Line") {
-    ReferenceConfig reference;
-    reference.value = 0.0;
-    reference.label = "Zero";
-    reference.color = SeriesColor{180, 180, 180};
-    reference.alpha = 0.65;
-    reference.line_width = 1.0;
-    reference.line_style = LineStyle::Dot;
-    return {reference};
-  }
-
-  if (name == "Target Value") {
-    ReferenceConfig reference;
-    reference.value = value;
-    reference.label = "Target";
-    reference.color = SeriesColor{80, 170, 255};
-    reference.alpha = 0.9;
-    reference.line_width = 1.2;
-    reference.line_style = LineStyle::Solid;
-    return {reference};
-  }
-
-  if (name == "Upper Limit") {
-    ReferenceConfig reference;
-    reference.value = value;
-    reference.label = "Upper Limit";
-    reference.color = SeriesColor{255, 180, 60};
-    reference.alpha = 0.9;
-    reference.line_width = 1.2;
-    reference.line_style = LineStyle::Dash;
-    return {reference};
-  }
-
-  if (name == "Lower Limit") {
-    ReferenceConfig reference;
-    reference.value = value;
-    reference.label = "Lower Limit";
-    reference.color = SeriesColor{80, 170, 255};
-    reference.alpha = 0.9;
-    reference.line_width = 1.2;
-    reference.line_style = LineStyle::Dash;
-    return {reference};
-  }
-
-  if (name == "Tolerance Band") {
-    ReferenceConfig reference;
-    reference.value = value;
-    reference.tolerance = tolerance;
-    reference.label = "Target";
-    reference.color = SeriesColor{255, 180, 60};
-    reference.alpha = 0.9;
-    reference.line_width = 1.2;
-    reference.line_style = LineStyle::Solid;
-    return {reference};
-  }
-
-  return {};
-}
-
 }  // namespace
 
 Plot2DDisplay::Plot2DDisplay()
 {
+  subscription_manager_ = std::make_unique<Plot2DSubscriptionManager>();
   overlay_backend_factory_ =
     [](std::string name)
     {
@@ -1031,16 +345,16 @@ void Plot2DDisplay::onInitialize()
         }
         return node_->get_topic_names_and_types();
       };
-    subscription_factory_.create_generic_subscription =
+    subscription_manager_->setFactory(
       [this](
-      const std::string & topic,
-      const std::string & type,
-      rclcpp::QoS qos,
-      SerializedMessageCallback callback)
+        const std::string & topic,
+        const std::string & type,
+        rclcpp::QoS qos,
+        PlotSerializedMessageCallback callback)
       {
         return node_->create_generic_subscription(
           topic, type, qos, std::move(callback));
-      };
+      });
   }
 
   initializeOverlayBackend_();
@@ -1829,7 +1143,6 @@ void Plot2DDisplay::resolveAndSubscribe_()
 {
   const TopicTypeMap topics = topicNamesAndTypes_();
   const Plot2DConfig config = configFromProperties_();
-  const rclcpp::QoS qos = qosProfileFromConfig(config.qos);
 
   Plot2DControllerState state;
   {
@@ -1838,42 +1151,30 @@ void Plot2DDisplay::resolveAndSubscribe_()
     state = controller_.state();
   }
 
-  subscriptions_.clear();
+  subscription_manager_->clear();
+  const std::vector<PlotSubscriptionTarget> subscription_targets =
+    subscriptionTargetsFromControllerState(state);
 
-  std::vector<std::pair<std::string, std::string>> subscription_topics;
-  for (const PlotSeriesControllerState & series : state.series) {
-    if (series.status == PlotControllerStatus::Ok) {
-      const std::pair<std::string, std::string> topic_type{series.topic, series.type};
-      const auto duplicate = std::find(
-        subscription_topics.begin(), subscription_topics.end(), topic_type);
-      if (duplicate == subscription_topics.end()) {
-        subscription_topics.push_back(topic_type);
-      }
-    }
-  }
-
-  if (subscription_topics.empty()) {
+  if (subscription_targets.empty()) {
     updateStatusFromController_(state);
     return;
   }
 
-  if (!subscription_factory_.create_generic_subscription) {
+  if (!subscription_manager_->hasFactory()) {
     updateStatusFromController_(state);
     return;
   }
 
   try {
-    for (const auto & [topic, type] : subscription_topics) {
-      subscriptions_.push_back(
-        subscription_factory_.create_generic_subscription(
-          topic,
-          type,
-          qos,
-          [this, topic](std::shared_ptr<rclcpp::SerializedMessage> message)
-          {
-            onSerializedMessage_(topic, std::move(message));
-          }));
-    }
+    subscription_manager_->subscribe(
+      subscription_targets,
+      config.qos,
+      [this](
+        const std::string & topic,
+        std::shared_ptr<rclcpp::SerializedMessage> message)
+      {
+        onSerializedMessage_(topic, std::move(message));
+      });
   } catch (const std::exception & exception) {
     setStatus(
       rviz_common::properties::StatusProperty::Error,
@@ -2142,7 +1443,7 @@ void Plot2DDisplay::renderOverlay_(const bool request_rviz_render)
 
 void Plot2DDisplay::unsubscribe_()
 {
-  subscriptions_.clear();
+  subscription_manager_->clear();
 }
 
 bool Plot2DDisplay::shouldRetrySubscriptions_() const
