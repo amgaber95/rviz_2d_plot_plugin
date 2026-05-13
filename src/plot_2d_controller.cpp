@@ -118,11 +118,45 @@ bool seriesSourceMatches(
     return false;
   }
 
+  if (previous_config.plot_mode != current_config.plot_mode ||
+    previous_config.time.source != current_config.time.source)
+  {
+    return false;
+  }
+
+  const SeriesConfig & previous_series = previous_config.series[previous_index];
+  if (current_config.plot_mode == PlotMode::XY) {
+    if (previous_series.topic != current_series.topic ||
+      previous_series.x_field != current_series.x_field ||
+      previous_series.y_field != current_series.y_field)
+    {
+      return false;
+    }
+  } else {
+    if (previous_series.topic != current_series.topic ||
+      previous_series.field != current_series.field)
+    {
+      return false;
+    }
+  }
+
   const PlotSeriesControllerState & previous_state_series =
     previous_state.series[previous_index];
-  if (previous_state_series.status != PlotControllerStatus::Ok ||
-    previous_state_series.topic != current_resolution.topic ||
-    previous_state_series.type != current_resolution.type ||
+  if (previous_state_series.status == PlotControllerStatus::Ok) {
+    return previous_state_series.topic == current_resolution.topic &&
+           previous_state_series.type == current_resolution.type;
+  }
+
+  return !previous_state_series.samples.empty();
+}
+
+bool seriesConfigSourceMatches(
+  const Plot2DConfig & previous_config,
+  const std::size_t previous_index,
+  const Plot2DConfig & current_config,
+  const SeriesConfig & current_series)
+{
+  if (previous_index >= previous_config.series.size() ||
     previous_config.plot_mode != current_config.plot_mode ||
     previous_config.time.source != current_config.time.source)
   {
@@ -131,10 +165,12 @@ bool seriesSourceMatches(
 
   const SeriesConfig & previous_series = previous_config.series[previous_index];
   if (current_config.plot_mode == PlotMode::XY) {
-    return previous_series.x_field == current_series.x_field &&
+    return previous_series.topic == current_series.topic &&
+           previous_series.x_field == current_series.x_field &&
            previous_series.y_field == current_series.y_field;
   }
-  return previous_series.field == current_series.field;
+  return previous_series.topic == current_series.topic &&
+         previous_series.field == current_series.field;
 }
 
 std::optional<std::size_t> matchingPreviousSeriesIndex(
@@ -170,6 +206,70 @@ std::optional<std::size_t> matchingPreviousSeriesIndex(
   return std::nullopt;
 }
 
+std::optional<std::size_t> matchingPreviousSeriesIndexByConfig(
+  const Plot2DConfig & previous_config,
+  const Plot2DControllerState & previous_state,
+  const std::vector<bool> & previous_series_consumed,
+  const std::size_t current_index,
+  const Plot2DConfig & current_config,
+  const SeriesConfig & current_series)
+{
+  if (current_index < previous_series_consumed.size() &&
+    !previous_series_consumed[current_index] &&
+    current_index < previous_state.series.size() &&
+    !previous_state.series[current_index].samples.empty() &&
+    seriesConfigSourceMatches(previous_config, current_index, current_config, current_series))
+  {
+    return current_index;
+  }
+
+  for (std::size_t previous_index = 0; previous_index < previous_series_consumed.size();
+    ++previous_index)
+  {
+    if (!previous_series_consumed[previous_index] &&
+      previous_index < previous_state.series.size() &&
+      !previous_state.series[previous_index].samples.empty() &&
+      seriesConfigSourceMatches(previous_config, previous_index, current_config, current_series))
+    {
+      return previous_index;
+    }
+  }
+
+  return std::nullopt;
+}
+
+void preserveSamplesFromPreviousSeries(
+  PlotSeriesControllerState & series_state,
+  const Plot2DConfig & previous_config,
+  const Plot2DControllerState & previous_state,
+  std::vector<bool> & previous_series_consumed,
+  const std::size_t previous_index,
+  const Plot2DConfig & current_config,
+  const SeriesConfig & current_series)
+{
+  previous_series_consumed[previous_index] = true;
+  const SeriesConfig & previous_series = previous_config.series[previous_index];
+  series_state.samples = previous_state.series[previous_index].samples;
+  series_state.samples.rewriteValuesForTransformChange(
+    previous_series.value_scale,
+    previous_series.value_offset,
+    current_series.value_scale,
+    current_series.value_offset);
+
+  const bool xy_mode = current_config.plot_mode == PlotMode::XY;
+  if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
+    if (!xy_mode || current_config.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
+      series_state.samples.pruneToWindow(latest->time, current_config.time.window_seconds);
+    }
+  }
+
+  if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
+    series_state.latest_value = latest->value;
+  } else {
+    series_state.latest_value.reset();
+  }
+}
+
 }  // namespace
 
 void Plot2DController::configure(
@@ -201,6 +301,14 @@ void Plot2DController::configure(
     if (!series.enabled) {
       series_state.status = PlotControllerStatus::Disabled;
       series_state.message = "Series is disabled";
+      const std::size_t series_index = state_.series.size();
+      const std::optional<std::size_t> previous_index = matchingPreviousSeriesIndexByConfig(
+        previous_config, previous_state, previous_series_consumed, series_index, config_, series);
+      if (previous_index.has_value()) {
+        preserveSamplesFromPreviousSeries(
+          series_state, previous_config, previous_state, previous_series_consumed,
+          previous_index.value(), config_, series);
+      }
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
       x_extractors_.push_back(nullptr);
@@ -215,6 +323,14 @@ void Plot2DController::configure(
 
     if (resolution.status != PlotPathStatus::Ok) {
       setResolutionError(series_state, resolution);
+      const std::size_t series_index = state_.series.size();
+      const std::optional<std::size_t> previous_index = matchingPreviousSeriesIndexByConfig(
+        previous_config, previous_state, previous_series_consumed, series_index, config_, series);
+      if (previous_index.has_value()) {
+        preserveSamplesFromPreviousSeries(
+          series_state, previous_config, previous_state, previous_series_consumed,
+          previous_index.value(), config_, series);
+      }
       state_.series.push_back(std::move(series_state));
       extractors_.push_back(nullptr);
       x_extractors_.push_back(nullptr);
@@ -274,24 +390,9 @@ void Plot2DController::configure(
       previous_config, previous_state, previous_series_consumed, series_index, config_, series,
       resolution);
     if (previous_index.has_value()) {
-      previous_series_consumed[previous_index.value()] = true;
-      const SeriesConfig & previous_series = previous_config.series[previous_index.value()];
-      series_state.samples = previous_state.series[previous_index.value()].samples;
-      series_state.samples.rewriteValuesForTransformChange(
-        previous_series.value_scale,
-        previous_series.value_offset,
-        series.value_scale,
-        series.value_offset);
-      if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
-        if (!xy_mode || config_.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
-          series_state.samples.pruneToWindow(latest->time, config_.time.window_seconds);
-        }
-      }
-      if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
-        series_state.latest_value = latest->value;
-      } else {
-        series_state.latest_value.reset();
-      }
+      preserveSamplesFromPreviousSeries(
+        series_state, previous_config, previous_state, previous_series_consumed,
+        previous_index.value(), config_, series);
     }
     state_.series.push_back(std::move(series_state));
     extractors_.push_back(std::move(extractor));

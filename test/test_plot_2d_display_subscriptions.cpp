@@ -162,6 +162,55 @@ TEST(Plot2DDisplay, SerializedMessageAppendsControllerSample)
   EXPECT_EQ(state.series[0].samples.size(), 1U);
 }
 
+TEST(Plot2DDisplay, SeriesEnableTogglePreservesControllerSamples)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  auto * enabled = dynamic_cast<rviz_common::properties::BoolProperty *>(series);
+  ASSERT_NE(nullptr, enabled);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  std_msgs::msg::Float64 message;
+  message.data = 12.5;
+  Plot2DDisplayTestAccessor::onSerializedMessage(display, serializeMessage(message));
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+
+  enabled->setBool(false);
+  processQtEvents();
+
+  const auto disabled_snapshot = Plot2DDisplayTestAccessor::renderSnapshot(display);
+  ASSERT_EQ(disabled_snapshot.config.series.size(), 1U);
+  ASSERT_EQ(disabled_snapshot.controller_state.series.size(), 1U);
+  EXPECT_FALSE(disabled_snapshot.config.series[0].enabled);
+  EXPECT_EQ(
+    disabled_snapshot.controller_state.series[0].status,
+    PlotControllerStatus::Disabled);
+  ASSERT_EQ(disabled_snapshot.controller_state.series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(
+    disabled_snapshot.controller_state.series[0].samples.samples().front().value, 12.5);
+
+  enabled->setBool(true);
+  processQtEvents();
+
+  const auto enabled_snapshot = Plot2DDisplayTestAccessor::renderSnapshot(display);
+  ASSERT_EQ(enabled_snapshot.config.series.size(), 1U);
+  ASSERT_EQ(enabled_snapshot.controller_state.series.size(), 1U);
+  EXPECT_TRUE(enabled_snapshot.config.series[0].enabled);
+  EXPECT_EQ(enabled_snapshot.controller_state.series[0].status, PlotControllerStatus::Ok);
+  ASSERT_EQ(enabled_snapshot.controller_state.series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(
+    enabled_snapshot.controller_state.series[0].samples.samples().front().value, 12.5);
+  ASSERT_TRUE(enabled_snapshot.controller_state.series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(enabled_snapshot.controller_state.series[0].latest_value.value(), 12.5);
+}
+
 TEST(Plot2DDisplay, SeriesDragDropPreservesControllerSamplesBySource)
 {
   ensureQtApplication();

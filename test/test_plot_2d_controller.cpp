@@ -361,6 +361,33 @@ TEST(Plot2DController, ReconfigurePreservesSamplesForUnchangedSeriesSource)
   EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 1.5);
 }
 
+TEST(Plot2DController, ReconfigurePreservesSamplesWhenSeriesIsTemporarilyDisabled)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5), 10.0));
+
+  config.series[0].enabled = false;
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_EQ(controller.state().series[0].status, PlotControllerStatus::Disabled);
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 1.5);
+
+  config.series[0].enabled = true;
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_EQ(controller.state().series[0].status, PlotControllerStatus::Ok);
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 1.5);
+  ASSERT_TRUE(controller.state().series[0].latest_value.has_value());
+  EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 1.5);
+}
+
 TEST(Plot2DController, ReconfigurePreservesSamplesWhenSeriesOrderChanges)
 {
   Plot2DController controller;
