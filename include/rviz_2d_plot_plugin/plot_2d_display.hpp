@@ -71,9 +71,10 @@ private Q_SLOTS:
   void onSeriesCountChanged();
   void onDuplicateSeriesChanged();
   void onDeleteSeriesChanged();
+  void onDuplicateReferenceChanged();
+  void onDeleteReferenceChanged();
   void onApplyReferencePresetChanged();
   void onReferenceCountChanged();
-  void onReferenceActionChanged();
   void onClearHistoryChanged();
   void onTopicOptionsRequested(
     rviz_common::properties::EditableEnumProperty * property);
@@ -120,9 +121,9 @@ private:
 
   struct ReferencePropertySet
   {
-    rviz_common::properties::Property * root{nullptr};
-    rviz_common::properties::EnumProperty * action{nullptr};
-    rviz_common::properties::BoolProperty * enabled{nullptr};
+    rviz_common::properties::BoolProperty * root{nullptr};
+    rviz_common::properties::BoolProperty * duplicate{nullptr};
+    rviz_common::properties::BoolProperty * delete_reference{nullptr};
     rviz_common::properties::FloatProperty * value{nullptr};
     rviz_common::properties::FloatProperty * tolerance{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
@@ -148,14 +149,19 @@ private:
   void rebuildReferenceProperties_(
     int count,
     const std::vector<ReferenceConfig> & values);
+  void replaceReferenceProperties_(const std::vector<ReferenceConfig> & values);
   void appendReferencePreset_();
   void updateModePropertyVisibility_();
   void updateSeriesPropertySummaries_();
+  void updateReferencePropertySummaries_();
   const SeriesPropertySet * seriesPropertiesForField_(
     rviz_common::properties::EditableEnumProperty * property) const;
   void onSeriesChildListChanged_(rviz_common::properties::Property * property);
+  void onReferenceChildListChanged_(rviz_common::properties::Property * property);
   void scheduleSeriesOrderSync_();
+  void scheduleReferenceOrderSync_();
   bool syncSeriesPropertyOrder_();
+  bool syncReferencePropertyOrder_();
   void resolveAndSubscribe_();
   void onSerializedMessage_(
     const std::string & topic,
@@ -218,6 +224,8 @@ private:
   rviz_common::properties::BoolProperty * apply_reference_preset_property_{nullptr};
   rviz_common::properties::IntProperty * reference_count_property_{nullptr};
   std::vector<ReferencePropertySet> reference_properties_;
+  bool rebuilding_reference_properties_{false};
+  bool reference_order_sync_pending_{false};
   rviz_common::properties::Property * legend_root_property_{nullptr};
   rviz_common::properties::BoolProperty * show_legend_property_{nullptr};
   rviz_common::properties::BoolProperty * show_latest_values_property_{nullptr};

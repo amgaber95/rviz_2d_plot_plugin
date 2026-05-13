@@ -68,29 +68,7 @@ public:
   }
 };
 
-class ChildOnlyGroupProperty : public rviz_common::properties::Property
-{
-public:
-  using rviz_common::properties::Property::Property;
-
-  void load(const rviz_common::Config & config) override
-  {
-    if (config.getType() != rviz_common::Config::Map) {
-      rviz_common::properties::Property::load(config);
-      return;
-    }
-
-    const int child_count = numChildren();
-    for (int i = 0; i < child_count; ++i) {
-      rviz_common::properties::Property * child = childAt(i);
-      if (child) {
-        child->load(config.mapGetChild(child->getName()));
-      }
-    }
-  }
-};
-
-class SeriesRootProperty : public rviz_common::properties::BoolProperty
+class ListItemBoolProperty : public rviz_common::properties::BoolProperty
 {
 public:
   using rviz_common::properties::BoolProperty::BoolProperty;
@@ -127,10 +105,20 @@ private:
   QString display_label_;
 };
 
-class SeriesGroupProperty : public rviz_common::properties::Property
+class ReorderableListProperty : public rviz_common::properties::Property
 {
 public:
   using rviz_common::properties::Property::Property;
+
+  void setFixedChildCount(const int count)
+  {
+    fixed_child_count_ = std::max(0, count);
+  }
+
+  int fixedChildCount() const
+  {
+    return fixed_child_count_;
+  }
 
   Qt::ItemFlags getViewFlags(const int column) const override
   {
@@ -143,12 +131,61 @@ public:
 
   void addChild(rviz_common::properties::Property * child, int index = -1) override
   {
-    if (dynamic_cast<SeriesRootProperty *>(child) && index >= 0) {
-      index = std::max(1, index);
+    if (dynamic_cast<ListItemBoolProperty *>(child) && index >= 0) {
+      index = std::max(fixed_child_count_, index);
     }
     rviz_common::properties::Property::addChild(child, index);
   }
+
+private:
+  int fixed_child_count_{0};
 };
+
+template<typename PropertySet>
+bool syncPropertyOrder(
+  rviz_common::properties::Property * root,
+  const int fixed_child_count,
+  std::vector<PropertySet> & properties,
+  const QString & row_name_prefix)
+{
+  if (!root) {
+    return false;
+  }
+
+  std::vector<PropertySet> ordered;
+  ordered.reserve(properties.size());
+  for (int i = fixed_child_count; i < root->numChildren(); ++i) {
+    rviz_common::properties::Property * child = root->childAt(i);
+    const auto it = std::find_if(
+      properties.begin(), properties.end(),
+      [child](const PropertySet & item) {
+        return item.root == child;
+      });
+    if (it != properties.end()) {
+      ordered.push_back(*it);
+    }
+  }
+
+  if (ordered.size() != properties.size()) {
+    return false;
+  }
+
+  bool changed = false;
+  for (std::size_t i = 0; i < ordered.size(); ++i) {
+    changed = changed || ordered[i].root != properties[i].root;
+  }
+  if (!changed) {
+    return false;
+  }
+
+  properties = std::move(ordered);
+  for (std::size_t i = 0; i < properties.size(); ++i) {
+    if (properties[i].root) {
+      properties[i].root->setName(row_name_prefix + QString::number(static_cast<int>(i) + 1));
+    }
+  }
+  return true;
+}
 
 rviz_common::properties::StatusProperty::Level statusLevel(
   const PlotControllerStatus status)
@@ -544,17 +581,8 @@ void addLegendPositionOptions(rviz_common::properties::EnumProperty * property)
 }
 
 constexpr const char * kNoReferencePreset = "None";
-constexpr const char * kNoReferenceAction = "None";
+constexpr const char * kReferenceValuePropertyName = "Y Value";
 constexpr int kReferenceFixedPropertyCount = 5;
-
-void addReferenceActionOptions(rviz_common::properties::EnumProperty * property)
-{
-  if (!property) {
-    return;
-  }
-  property->addOptionStd(kNoReferenceAction);
-  property->addOptionStd("Delete");
-}
 
 void addReferencePresetOptions(rviz_common::properties::EnumProperty * property)
 {
@@ -659,8 +687,10 @@ Plot2DDisplay::Plot2DDisplay()
     this, SLOT(onPlotModeChanged()), this);
   addPlotModeOptions(plot_mode_property_);
 
-  series_root_property_ = new SeriesGroupProperty(
+  auto * series_root = new ReorderableListProperty(
     "Series", QVariant(), "Topic field series to draw.", this);
+  series_root->setFixedChildCount(1);
+  series_root_property_ = series_root;
   QObject::connect(
     series_root_property_,
     &rviz_common::properties::Property::childListChanged,
@@ -741,8 +771,15 @@ Plot2DDisplay::Plot2DDisplay()
     "Minor Divisions", 1, "Minor grid lines per major tick interval.",
     grid_root_property_, SLOT(onRenderPropertyChanged()), this, 0, 8);
 
-  references_root_property_ = new rviz_common::properties::Property(
+  auto * references_root = new ReorderableListProperty(
     "References", QVariant(), "Horizontal reference lines.", this);
+  references_root->setFixedChildCount(kReferenceFixedPropertyCount);
+  references_root_property_ = references_root;
+  QObject::connect(
+    references_root_property_,
+    &rviz_common::properties::Property::childListChanged,
+    this,
+    &Plot2DDisplay::onReferenceChildListChanged_);
   reference_preset_property_ = new rviz_common::properties::EnumProperty(
     "Preset", kNoReferencePreset, "Common reference line presets.",
     references_root_property_);
@@ -857,6 +894,7 @@ void Plot2DDisplay::load(const rviz_common::Config & config)
   rviz_common::Display::load(config);
   updateModePropertyVisibility_();
   updateSeriesPropertySummaries_();
+  updateReferencePropertySummaries_();
 }
 
 void Plot2DDisplay::onInitialize()
@@ -942,6 +980,7 @@ void Plot2DDisplay::reset()
 void Plot2DDisplay::onConfigPropertyChanged()
 {
   updateSeriesPropertySummaries_();
+  updateReferencePropertySummaries_();
   resolveAndSubscribe_();
   renderOverlay_();
 }
@@ -1059,53 +1098,80 @@ void Plot2DDisplay::onReferenceCountChanged()
   onConfigPropertyChanged();
 }
 
-void Plot2DDisplay::onReferenceActionChanged()
+void Plot2DDisplay::onDuplicateReferenceChanged()
 {
-  auto * action_property =
-    qobject_cast<rviz_common::properties::EnumProperty *>(sender());
-  if (!action_property) {
+  auto * duplicate_property =
+    qobject_cast<rviz_common::properties::BoolProperty *>(sender());
+  if (!duplicate_property || !duplicate_property->getBool()) {
     return;
   }
 
   const auto property_it = std::find_if(
     reference_properties_.begin(), reference_properties_.end(),
-    [action_property](const ReferencePropertySet & properties) {
-      return properties.action == action_property;
+    [duplicate_property](const ReferencePropertySet & properties) {
+      return properties.duplicate == duplicate_property;
     });
   if (property_it == reference_properties_.end()) {
-    return;
-  }
-
-  const std::string action = action_property->getStdString();
-  if (action == kNoReferenceAction) {
     return;
   }
 
   std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
   const std::size_t index = static_cast<std::size_t>(
     std::distance(reference_properties_.begin(), property_it));
-  bool changed = false;
-
-  if (action == "Delete" && index < references.size()) {
-    references.erase(references.begin() + static_cast<std::ptrdiff_t>(index));
-    changed = true;
-  }
-
-  if (!changed) {
-    const QSignalBlocker blocker(action_property);
-    action_property->setValue(kNoReferenceAction);
+  if (index >= references.size() || references.size() >= 12U) {
+    const QSignalBlocker blocker(duplicate_property);
+    duplicate_property->setBool(false);
     return;
   }
+
+  ReferenceConfig copy = references[index];
+  if (!copy.label.empty()) {
+    copy.label += " Copy";
+  }
+  references.insert(references.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
 
   QTimer::singleShot(
     0,
     this,
     [this, references = std::move(references)]() mutable {
-      {
-        const QSignalBlocker blocker(reference_count_property_);
-        reference_count_property_->setInt(static_cast<int>(references.size()));
-      }
-      rebuildReferenceProperties_(static_cast<int>(references.size()), references);
+      replaceReferenceProperties_(references);
+      onConfigPropertyChanged();
+    });
+}
+
+void Plot2DDisplay::onDeleteReferenceChanged()
+{
+  auto * delete_property =
+    qobject_cast<rviz_common::properties::BoolProperty *>(sender());
+  if (!delete_property || !delete_property->getBool()) {
+    return;
+  }
+
+  const auto property_it = std::find_if(
+    reference_properties_.begin(), reference_properties_.end(),
+    [delete_property](const ReferencePropertySet & properties) {
+      return properties.delete_reference == delete_property;
+    });
+  if (property_it == reference_properties_.end()) {
+    return;
+  }
+
+  std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
+  const std::size_t index = static_cast<std::size_t>(
+    std::distance(reference_properties_.begin(), property_it));
+  if (index >= references.size()) {
+    const QSignalBlocker blocker(delete_property);
+    delete_property->setBool(false);
+    return;
+  }
+
+  references.erase(references.begin() + static_cast<std::ptrdiff_t>(index));
+
+  QTimer::singleShot(
+    0,
+    this,
+    [this, references = std::move(references)]() mutable {
+      replaceReferenceProperties_(references);
       onConfigPropertyChanged();
     });
 }
@@ -1190,7 +1256,7 @@ std::vector<ReferenceConfig> Plot2DDisplay::referenceConfigFromProperties_() con
   references.reserve(reference_properties_.size());
   for (const ReferencePropertySet & properties : reference_properties_) {
     ReferenceConfig config;
-    config.enabled = properties.enabled && properties.enabled->getBool();
+    config.enabled = properties.root && properties.root->getBool();
     config.value = properties.value ? properties.value->getFloat() : 0.0;
     config.tolerance = properties.tolerance ? properties.tolerance->getFloat() : 0.0;
     config.label = properties.label ? properties.label->getStdString() : "";
@@ -1280,7 +1346,7 @@ void Plot2DDisplay::rebuildSeriesProperties_(
 
     SeriesPropertySet properties;
     const QString name = "Series " + QString::number(i + 1);
-    properties.root = new SeriesRootProperty(
+    properties.root = new ListItemBoolProperty(
       name, value.enabled, "Enable this plotted topic field.", series_root_property_,
       SLOT(onConfigPropertyChanged()), this);
     properties.duplicate = new rviz_common::properties::BoolProperty(
@@ -1384,6 +1450,7 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     reference_count_property_->setInt(repaired_count);
   }
 
+  rebuilding_reference_properties_ = true;
   references_root_property_->removeChildren(kReferenceFixedPropertyCount);
   reference_properties_.clear();
   reference_properties_.reserve(static_cast<std::size_t>(repaired_count));
@@ -1396,17 +1463,20 @@ void Plot2DDisplay::rebuildReferenceProperties_(
 
     ReferencePropertySet properties;
     const QString name = "Reference " + QString::number(i + 1);
-    properties.root = new ChildOnlyGroupProperty(
-      name, QVariant(), "Horizontal reference line.", references_root_property_);
-    properties.action = new rviz_common::properties::EnumProperty(
-      "Action", kNoReferenceAction, "Delete this reference.",
-      properties.root, SLOT(onReferenceActionChanged()), this);
-    addReferenceActionOptions(properties.action);
-    properties.enabled = new rviz_common::properties::BoolProperty(
-      "Enabled", value.enabled, "Enable this reference line.", properties.root,
+    properties.root = new ListItemBoolProperty(
+      name, value.enabled, "Enable this reference line.", references_root_property_,
       SLOT(onConfigPropertyChanged()), this);
+    properties.duplicate = new rviz_common::properties::BoolProperty(
+      "Duplicate", false, "Duplicate this reference.",
+      properties.root, SLOT(onDuplicateReferenceChanged()), this);
+    properties.duplicate->setShouldBeSaved(false);
+    properties.delete_reference = new rviz_common::properties::BoolProperty(
+      "Delete", false, "Delete this reference.",
+      properties.root, SLOT(onDeleteReferenceChanged()), this);
+    properties.delete_reference->setShouldBeSaved(false);
     properties.value = new rviz_common::properties::FloatProperty(
-      "Value", value.value, "Y-axis value for this reference line.", properties.root,
+      kReferenceValuePropertyName, value.value, "Y-axis value for this reference line.",
+      properties.root,
       SLOT(onConfigPropertyChanged()), this);
     properties.tolerance = new rviz_common::properties::FloatProperty(
       "Tolerance", value.tolerance,
@@ -1434,6 +1504,18 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     addLineStyleOptions(properties.line_style);
     reference_properties_.push_back(properties);
   }
+  rebuilding_reference_properties_ = false;
+  updateReferencePropertySummaries_();
+}
+
+void Plot2DDisplay::replaceReferenceProperties_(const std::vector<ReferenceConfig> & values)
+{
+  const int count = static_cast<int>(std::clamp<std::size_t>(values.size(), 0U, 12U));
+  {
+    const QSignalBlocker blocker(reference_count_property_);
+    reference_count_property_->setInt(count);
+  }
+  rebuildReferenceProperties_(count, values);
 }
 
 void Plot2DDisplay::appendReferencePreset_()
@@ -1456,11 +1538,7 @@ void Plot2DDisplay::appendReferencePreset_()
     references.push_back(reference);
   }
 
-  {
-    const QSignalBlocker blocker(reference_count_property_);
-    reference_count_property_->setInt(static_cast<int>(references.size()));
-  }
-  rebuildReferenceProperties_(static_cast<int>(references.size()), references);
+  replaceReferenceProperties_(references);
   onConfigPropertyChanged();
 }
 
@@ -1495,7 +1573,7 @@ void Plot2DDisplay::updateSeriesPropertySummaries_()
     plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
   const std::vector<SeriesConfig> series = seriesConfigFromProperties_();
   for (std::size_t i = 0; i < series_properties_.size() && i < series.size(); ++i) {
-    auto * root = dynamic_cast<SeriesRootProperty *>(series_properties_[i].root);
+    auto * root = dynamic_cast<ListItemBoolProperty *>(series_properties_[i].root);
     if (!root) {
       continue;
     }
@@ -1506,6 +1584,23 @@ void Plot2DDisplay::updateSeriesPropertySummaries_()
     }
     if (label.isEmpty()) {
       label = "Series " + QString::number(static_cast<int>(i) + 1);
+    }
+    root->setDisplayLabel(label);
+  }
+}
+
+void Plot2DDisplay::updateReferencePropertySummaries_()
+{
+  const std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
+  for (std::size_t i = 0; i < reference_properties_.size() && i < references.size(); ++i) {
+    auto * root = dynamic_cast<ListItemBoolProperty *>(reference_properties_[i].root);
+    if (!root) {
+      continue;
+    }
+
+    QString label = QString::fromStdString(references[i].label);
+    if (label.isEmpty()) {
+      label = "Reference " + QString::number(static_cast<int>(i) + 1);
     }
     root->setDisplayLabel(label);
   }
@@ -1530,6 +1625,14 @@ void Plot2DDisplay::onSeriesChildListChanged_(
   }
 }
 
+void Plot2DDisplay::onReferenceChildListChanged_(
+  rviz_common::properties::Property * property)
+{
+  if (property == references_root_property_ && !rebuilding_reference_properties_) {
+    scheduleReferenceOrderSync_();
+  }
+}
+
 void Plot2DDisplay::scheduleSeriesOrderSync_()
 {
   if (series_order_sync_pending_) {
@@ -1547,45 +1650,40 @@ void Plot2DDisplay::scheduleSeriesOrderSync_()
     });
 }
 
+void Plot2DDisplay::scheduleReferenceOrderSync_()
+{
+  if (reference_order_sync_pending_) {
+    return;
+  }
+  reference_order_sync_pending_ = true;
+  QTimer::singleShot(
+    0,
+    this,
+    [this]() {
+      reference_order_sync_pending_ = false;
+      if (syncReferencePropertyOrder_()) {
+        onConfigPropertyChanged();
+      }
+    });
+}
+
 bool Plot2DDisplay::syncSeriesPropertyOrder_()
 {
-  if (!series_root_property_) {
+  if (!syncPropertyOrder(series_root_property_, 1, series_properties_, "Series ")) {
     return false;
-  }
-
-  std::vector<SeriesPropertySet> ordered;
-  ordered.reserve(series_properties_.size());
-  for (int i = 1; i < series_root_property_->numChildren(); ++i) {
-    rviz_common::properties::Property * child = series_root_property_->childAt(i);
-    const auto it = std::find_if(
-      series_properties_.begin(), series_properties_.end(),
-      [child](const SeriesPropertySet & properties) {
-        return properties.root == child;
-      });
-    if (it != series_properties_.end()) {
-      ordered.push_back(*it);
-    }
-  }
-
-  if (ordered.size() != series_properties_.size()) {
-    return false;
-  }
-
-  bool changed = false;
-  for (std::size_t i = 0; i < ordered.size(); ++i) {
-    changed = changed || ordered[i].root != series_properties_[i].root;
-  }
-  if (!changed) {
-    return false;
-  }
-
-  series_properties_ = std::move(ordered);
-  for (std::size_t i = 0; i < series_properties_.size(); ++i) {
-    if (series_properties_[i].root) {
-      series_properties_[i].root->setName("Series " + QString::number(static_cast<int>(i) + 1));
-    }
   }
   updateSeriesPropertySummaries_();
+  return true;
+}
+
+bool Plot2DDisplay::syncReferencePropertyOrder_()
+{
+  if (!syncPropertyOrder(
+      references_root_property_, kReferenceFixedPropertyCount, reference_properties_, "Reference "))
+  {
+    return false;
+  }
+  updateReferencePropertySummaries_();
   return true;
 }
 

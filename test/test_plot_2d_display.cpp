@@ -759,8 +759,8 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   auto * reference =
     findChild(Plot2DDisplayTestAccessor::referencesRoot(display), "Reference 1");
   ASSERT_NE(nullptr, reference);
-  findChild(reference, "Enabled")->setValue(true);
-  findChild(reference, "Value")->setValue(0.5);
+  reference->setValue(true);
+  findChild(reference, "Y Value")->setValue(0.5);
   findChild(reference, "Tolerance")->setValue(0.2);
   findChild(reference, "Label")->setValue("Limit");
   findChild(reference, "Color")->setValue(QColor(255, 180, 60));
@@ -838,7 +838,7 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   reference_count->setValue(1);
   auto * reference_1 = findChild(references_root, "Reference 1");
   ASSERT_NE(nullptr, reference_1);
-  findChild(reference_1, "Value")->setValue(0.25);
+  findChild(reference_1, "Y Value")->setValue(0.25);
   findChild(reference_1, "Label")->setValue("Existing");
   auto * preset = findChild(references_root, "Preset");
   auto * preset_value = findChild(references_root, "Preset Value");
@@ -863,9 +863,9 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   auto * reference_2 = findChild(references_root, "Reference 2");
   ASSERT_NE(nullptr, reference_1);
   ASSERT_NE(nullptr, reference_2);
-  EXPECT_DOUBLE_EQ(findChild(reference_1, "Value")->getValue().toDouble(), 0.25);
+  EXPECT_DOUBLE_EQ(findChild(reference_1, "Y Value")->getValue().toDouble(), 0.25);
   EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "Existing");
-  EXPECT_DOUBLE_EQ(findChild(reference_2, "Value")->getValue().toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(findChild(reference_2, "Y Value")->getValue().toDouble(), 1.0);
   EXPECT_NEAR(findChild(reference_2, "Tolerance")->getValue().toDouble(), 0.25, 1e-6);
   EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Target");
   EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
@@ -879,7 +879,38 @@ TEST(Plot2DDisplay, ReferencePresetAppendsNewReferences)
   EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
 }
 
-TEST(Plot2DDisplay, ReferenceActionDeletesReference)
+TEST(Plot2DDisplay, ReferenceRowsUseRootCheckboxAndLabelSummary)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(display);
+  auto * reference_count = findChild(references_root, "Reference Count");
+  ASSERT_NE(nullptr, reference_count);
+
+  reference_count->setValue(1);
+  auto * reference = findChild(references_root, "Reference 1");
+  ASSERT_NE(nullptr, reference);
+
+  EXPECT_TRUE(reference->getValue().canConvert<bool>());
+  EXPECT_TRUE(reference->getValue().toBool());
+  EXPECT_FALSE(reference->getViewData(1, Qt::DisplayRole).isValid());
+  EXPECT_TRUE(reference->getViewData(1, Qt::CheckStateRole).isValid());
+  EXPECT_TRUE(reference->getViewFlags(1) & Qt::ItemIsUserCheckable);
+  EXPECT_EQ(reference->getViewData(0, Qt::DisplayRole).toString(), "Reference 1");
+  EXPECT_EQ(nullptr, findChild(reference, "Enabled"));
+  EXPECT_EQ(nullptr, findChild(reference, "Action"));
+
+  findChild(reference, "Label")->setValue("CTE = 0");
+
+  EXPECT_EQ(reference->getViewData(0, Qt::DisplayRole).toString(), "CTE = 0");
+
+  reference->setValue(false);
+  const Plot2DConfig config = Plot2DDisplayTestAccessor::configFromProperties(display);
+  ASSERT_EQ(config.references.size(), 1U);
+  EXPECT_FALSE(config.references[0].enabled);
+}
+
+TEST(Plot2DDisplay, ReferenceCommandCheckboxesDuplicateAndDeleteReference)
 {
   ensureQtApplication();
   Plot2DDisplay display;
@@ -892,24 +923,92 @@ TEST(Plot2DDisplay, ReferenceActionDeletesReference)
   auto * reference_2 = findChild(references_root, "Reference 2");
   ASSERT_NE(nullptr, reference_1);
   ASSERT_NE(nullptr, reference_2);
-  findChild(reference_1, "Value")->setValue(0.25);
+  findChild(reference_1, "Y Value")->setValue(0.25);
   findChild(reference_1, "Label")->setValue("First");
-  findChild(reference_2, "Value")->setValue(0.75);
+  findChild(reference_2, "Y Value")->setValue(0.75);
   findChild(reference_2, "Tolerance")->setValue(0.1);
   findChild(reference_2, "Label")->setValue("Second");
 
-  auto * action = findChild(reference_1, "Action");
-  ASSERT_NE(nullptr, action);
-  action->setValue("Delete");
+  auto * duplicate = findChild(reference_1, "Duplicate");
+  ASSERT_NE(nullptr, duplicate);
+  EXPECT_FALSE(duplicate->shouldBeSaved());
+  duplicate->setValue(true);
   processQtEvents();
 
-  EXPECT_EQ(reference_count->getValue().toInt(), 1);
+  EXPECT_EQ(reference_count->getValue().toInt(), 3);
   reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  auto * reference_3 = findChild(references_root, "Reference 3");
   ASSERT_NE(nullptr, reference_1);
-  EXPECT_DOUBLE_EQ(findChild(reference_1, "Value")->getValue().toDouble(), 0.75);
-  EXPECT_NEAR(findChild(reference_1, "Tolerance")->getValue().toDouble(), 0.1, 1e-6);
-  EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "Second");
-  EXPECT_EQ(nullptr, findChild(references_root, "Reference 2"));
+  ASSERT_NE(nullptr, reference_2);
+  ASSERT_NE(nullptr, reference_3);
+  EXPECT_DOUBLE_EQ(findChild(reference_2, "Y Value")->getValue().toDouble(), 0.25);
+  EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "First Copy");
+  EXPECT_DOUBLE_EQ(findChild(reference_3, "Y Value")->getValue().toDouble(), 0.75);
+
+  auto * delete_reference = findChild(reference_2, "Delete");
+  ASSERT_NE(nullptr, delete_reference);
+  EXPECT_FALSE(delete_reference->shouldBeSaved());
+  delete_reference->setValue(true);
+  processQtEvents();
+
+  EXPECT_EQ(reference_count->getValue().toInt(), 2);
+  reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  EXPECT_DOUBLE_EQ(findChild(reference_1, "Y Value")->getValue().toDouble(), 0.25);
+  EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "First");
+  EXPECT_DOUBLE_EQ(findChild(reference_2, "Y Value")->getValue().toDouble(), 0.75);
+  EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Second");
+  EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
+}
+
+TEST(Plot2DDisplay, ReferenceRowsUseNativeDragDropReordering)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(display);
+  auto * reference_count = findChild(references_root, "Reference Count");
+  ASSERT_NE(nullptr, reference_count);
+
+  reference_count->setValue(3);
+  auto * reference_1 = findChild(references_root, "Reference 1");
+  auto * reference_2 = findChild(references_root, "Reference 2");
+  auto * reference_3 = findChild(references_root, "Reference 3");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  ASSERT_NE(nullptr, reference_3);
+  EXPECT_TRUE(references_root->getViewFlags(0) & Qt::ItemIsDropEnabled);
+  EXPECT_TRUE(reference_1->getViewFlags(0) & Qt::ItemIsDragEnabled);
+
+  findChild(reference_1, "Label")->setValue("First");
+  findChild(reference_1, "Y Value")->setValue(1.0);
+  findChild(reference_2, "Label")->setValue("Second");
+  findChild(reference_2, "Y Value")->setValue(2.0);
+  findChild(reference_3, "Label")->setValue("Third");
+  findChild(reference_3, "Y Value")->setValue(3.0);
+
+  rviz_common::properties::Property * moved = references_root->takeChildAt(7);
+  ASSERT_NE(nullptr, moved);
+  references_root->addChild(moved, 6);
+  processQtEvents();
+
+  reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  reference_3 = findChild(references_root, "Reference 3");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  ASSERT_NE(nullptr, reference_3);
+  EXPECT_EQ(findChild(reference_1, "Label")->getValue().toString(), "First");
+  EXPECT_EQ(findChild(reference_2, "Label")->getValue().toString(), "Third");
+  EXPECT_EQ(findChild(reference_3, "Label")->getValue().toString(), "Second");
+
+  const Plot2DConfig config = Plot2DDisplayTestAccessor::configFromProperties(display);
+  ASSERT_EQ(config.references.size(), 3U);
+  EXPECT_EQ(config.references[0].label, "First");
+  EXPECT_EQ(config.references[1].label, "Third");
+  EXPECT_EQ(config.references[2].label, "Second");
 }
 
 TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
@@ -1157,7 +1256,7 @@ TEST(Plot2DDisplay, LoadsDynamicSeriesAndReferenceCountsBeforeChildren)
   auto references = config.mapMakeChild("References");
   references.mapSetValue("Reference Count", 1);
   auto reference_1 = references.mapMakeChild("Reference 1");
-  reference_1.mapSetValue("Value", 3.0);
+  reference_1.mapSetValue("Y Value", 3.0);
   reference_1.mapSetValue("Label", "Upper Limit");
 
   testing::internal::CaptureStdout();
