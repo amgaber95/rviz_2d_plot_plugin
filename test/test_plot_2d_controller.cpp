@@ -28,10 +28,12 @@ namespace
 
 rclcpp::SerializedMessage serializeTwist(
   const double linear_x,
-  const double angular_z = 0.0)
+  const double angular_z = 0.0,
+  const double linear_y = 0.0)
 {
   geometry_msgs::msg::Twist message;
   message.linear.x = linear_x;
+  message.linear.y = linear_y;
   message.angular.z = angular_z;
 
   rclcpp::Serialization<geometry_msgs::msg::Twist> serializer;
@@ -359,6 +361,58 @@ TEST(Plot2DController, ReconfigurePreservesSamplesForUnchangedSeriesSource)
   EXPECT_DOUBLE_EQ(controller.state().series[0].latest_value.value(), 1.5);
 }
 
+TEST(Plot2DController, ReconfigurePreservesSamplesWhenSeriesOrderChanges)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.series.push_back(config.series.front());
+  config.series[0].field = "linear/x";
+  config.series[0].label = "Linear X";
+  config.series[1].field = "angular/z";
+  config.series[1].label = "Angular Z";
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5, -0.4), 10.0));
+
+  std::swap(config.series[0], config.series[1]);
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 2U);
+  EXPECT_EQ(controller.state().series[0].label, "Angular Z");
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, -0.4);
+  EXPECT_EQ(controller.state().series[1].label, "Linear X");
+  ASSERT_EQ(controller.state().series[1].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[1].samples.samples().front().value, 1.5);
+}
+
+TEST(Plot2DController, ReconfigurePreservesSamplesWhenLaterSeriesShiftsAfterDelete)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  config.series.resize(3, config.series.front());
+  config.series[0].field = "linear/x";
+  config.series[0].label = "Linear X";
+  config.series[1].field = "linear/y";
+  config.series[1].label = "Linear Y";
+  config.series[2].field = "angular/z";
+  config.series[2].label = "Angular Z";
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5, -0.4, 2.5), 10.0));
+
+  config.series.erase(config.series.begin() + 1);
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 2U);
+  EXPECT_EQ(controller.state().series[0].label, "Linear X");
+  ASSERT_EQ(controller.state().series[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[0].samples.samples().front().value, 1.5);
+  EXPECT_EQ(controller.state().series[1].label, "Angular Z");
+  ASSERT_EQ(controller.state().series[1].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(controller.state().series[1].samples.samples().front().value, -0.4);
+}
+
 TEST(Plot2DController, ReconfigureDropsSamplesWhenSeriesSourceChanges)
 {
   Plot2DController controller;
@@ -368,6 +422,40 @@ TEST(Plot2DController, ReconfigureDropsSamplesWhenSeriesSourceChanges)
   ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5), 10.0));
 
   config.series[0].field = "angular/z";
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
+  EXPECT_FALSE(controller.state().series[0].latest_value.has_value());
+}
+
+TEST(Plot2DController, ReconfigureDropsSamplesWhenPlotModeChanges)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5, -0.4), 10.0));
+
+  config.plot_mode = PlotMode::XY;
+  config.series[0].x_field = "linear/x";
+  config.series[0].y_field = "angular/z";
+  controller.configure(config, topics);
+
+  ASSERT_EQ(controller.state().series.size(), 1U);
+  EXPECT_TRUE(controller.state().series[0].samples.empty());
+  EXPECT_FALSE(controller.state().series[0].latest_value.has_value());
+}
+
+TEST(Plot2DController, ReconfigureDropsSamplesWhenTimeSourceChanges)
+{
+  Plot2DController controller;
+  TopicTypeMap topics{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}};
+  Plot2DConfig config = makeConfig();
+  controller.configure(config, topics);
+  ASSERT_TRUE(controller.appendSerializedMessage("/cmd_vel", serializeTwist(1.5), 10.0));
+
+  config.time.source = TimeSource::HeaderStamp;
   controller.configure(config, topics);
 
   ASSERT_EQ(controller.state().series.size(), 1U);

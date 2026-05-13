@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace rviz_2d_plot_plugin
 {
@@ -103,6 +104,72 @@ std::optional<double> extractHeaderStampSeconds(
   return sec.value.value() + nanosec.value.value() * 1e-9;
 }
 
+bool seriesSourceMatches(
+  const Plot2DConfig & previous_config,
+  const Plot2DControllerState & previous_state,
+  const std::size_t previous_index,
+  const Plot2DConfig & current_config,
+  const SeriesConfig & current_series,
+  const PlotPathResolution & current_resolution)
+{
+  if (previous_index >= previous_config.series.size() ||
+    previous_index >= previous_state.series.size())
+  {
+    return false;
+  }
+
+  const PlotSeriesControllerState & previous_state_series =
+    previous_state.series[previous_index];
+  if (previous_state_series.status != PlotControllerStatus::Ok ||
+    previous_state_series.topic != current_resolution.topic ||
+    previous_state_series.type != current_resolution.type ||
+    previous_config.plot_mode != current_config.plot_mode ||
+    previous_config.time.source != current_config.time.source)
+  {
+    return false;
+  }
+
+  const SeriesConfig & previous_series = previous_config.series[previous_index];
+  if (current_config.plot_mode == PlotMode::XY) {
+    return previous_series.x_field == current_series.x_field &&
+           previous_series.y_field == current_series.y_field;
+  }
+  return previous_series.field == current_series.field;
+}
+
+std::optional<std::size_t> matchingPreviousSeriesIndex(
+  const Plot2DConfig & previous_config,
+  const Plot2DControllerState & previous_state,
+  const std::vector<bool> & previous_series_consumed,
+  const std::size_t current_index,
+  const Plot2DConfig & current_config,
+  const SeriesConfig & current_series,
+  const PlotPathResolution & current_resolution)
+{
+  if (current_index < previous_series_consumed.size() &&
+    !previous_series_consumed[current_index] &&
+    seriesSourceMatches(
+      previous_config, previous_state, current_index, current_config, current_series,
+      current_resolution))
+  {
+    return current_index;
+  }
+
+  for (std::size_t previous_index = 0; previous_index < previous_series_consumed.size();
+    ++previous_index)
+  {
+    if (!previous_series_consumed[previous_index] &&
+      seriesSourceMatches(
+        previous_config, previous_state, previous_index, current_config, current_series,
+        current_resolution))
+    {
+      return previous_index;
+    }
+  }
+
+  return std::nullopt;
+}
+
 }  // namespace
 
 void Plot2DController::configure(
@@ -115,6 +182,7 @@ void Plot2DController::configure(
   config_ = std::move(config);
   config_.repair();
   state_ = Plot2DControllerState{};
+  std::vector<bool> previous_series_consumed(previous_state.series.size(), false);
   extractors_.clear();
   x_extractors_.clear();
   header_stamp_extractors_.clear();
@@ -202,24 +270,23 @@ void Plot2DController::configure(
 
     series_state.status = PlotControllerStatus::Ok;
     const std::size_t series_index = state_.series.size();
-    if (series_index < previous_config.series.size() &&
-      series_index < previous_state.series.size() &&
-      previous_state.series[series_index].status == PlotControllerStatus::Ok &&
-      previous_state.series[series_index].topic == resolution.topic &&
-      previous_state.series[series_index].type == resolution.type &&
-      previous_config.series[series_index].field == series.field &&
-      previous_config.series[series_index].y_field == series.y_field &&
-      previous_config.series[series_index].x_field == series.x_field &&
-      previous_config.plot_mode == config_.plot_mode &&
-      previous_config.time.source == config_.time.source)
-    {
-      series_state.samples = previous_state.series[series_index].samples;
+    const std::optional<std::size_t> previous_index = matchingPreviousSeriesIndex(
+      previous_config, previous_state, previous_series_consumed, series_index, config_, series,
+      resolution);
+    if (previous_index.has_value()) {
+      previous_series_consumed[previous_index.value()] = true;
+      const SeriesConfig & previous_series = previous_config.series[previous_index.value()];
+      series_state.samples = previous_state.series[previous_index.value()].samples;
       series_state.samples.rewriteValuesForTransformChange(
-        previous_config.series[series_index].value_scale,
-        previous_config.series[series_index].value_offset,
+        previous_series.value_scale,
+        previous_series.value_offset,
         series.value_scale,
         series.value_offset);
-      series_state.latest_value = previous_state.series[series_index].latest_value;
+      if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
+        if (!xy_mode || config_.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
+          series_state.samples.pruneToWindow(latest->time, config_.time.window_seconds);
+        }
+      }
       if (const std::optional<PlotSample> latest = series_state.samples.latest()) {
         series_state.latest_value = latest->value;
       } else {
