@@ -67,6 +67,8 @@ protected:
 private Q_SLOTS:
   void onConfigPropertyChanged();
   void onRenderPropertyChanged();
+  void onSeriesAppearancePropertyChanged();
+  void onReferencePropertyChanged();
   void onPlotModeChanged();
   void onSeriesCountChanged();
   void onDuplicateSeriesChanged();

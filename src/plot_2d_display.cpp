@@ -720,38 +720,38 @@ Plot2DDisplay::Plot2DDisplay()
   addXYHistoryModeOptions(xy_history_mode_property_);
   refresh_rate_property_ = new rviz_common::properties::FloatProperty(
     "Refresh Rate", 20.0F, "Overlay redraw rate in Hz.", time_root_property_,
-    SLOT(onConfigPropertyChanged()), this);
+    SLOT(onRenderPropertyChanged()), this);
   refresh_rate_property_->setMin(1.0F);
 
   x_axis_root_property_ = new rviz_common::properties::Property(
     "X Axis", QVariant(), "X-axis scale settings for XY mode.", this);
   x_auto_scale_property_ = new rviz_common::properties::BoolProperty(
     "Auto Scale", true, "Automatically fit XY x-axis values.",
-    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+    x_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
   x_min_property_ = new rviz_common::properties::FloatProperty(
     "X Min", -1.0F, "Fixed x-axis minimum when auto scale is disabled.",
-    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+    x_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
   x_max_property_ = new rviz_common::properties::FloatProperty(
     "X Max", 1.0F, "Fixed x-axis maximum when auto scale is disabled.",
-    x_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+    x_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
   x_axis_scale_property_ = new rviz_common::properties::EnumProperty(
     "Axis Scale",
     QString::fromStdString(xyAxisScaleModeName(XYAxisScaleMode::Independent)),
     "XY axis scale relationship.", x_axis_root_property_,
-    SLOT(onConfigPropertyChanged()), this);
+    SLOT(onRenderPropertyChanged()), this);
   addXYAxisScaleModeOptions(x_axis_scale_property_);
 
   y_axis_root_property_ = new rviz_common::properties::Property(
     "Y Axis", QVariant(), "Vertical value axis scaling.", this);
   auto_scale_property_ = new rviz_common::properties::BoolProperty(
     "Auto Scale", true, "Automatically fit the y-axis to visible samples.",
-    y_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+    y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
   y_min_property_ = new rviz_common::properties::FloatProperty(
     "Y Min", -1.0F, "Fixed y-axis minimum when auto scale is disabled.",
-    y_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+    y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
   y_max_property_ = new rviz_common::properties::FloatProperty(
     "Y Max", 1.0F, "Fixed y-axis maximum when auto scale is disabled.",
-    y_axis_root_property_, SLOT(onConfigPropertyChanged()), this);
+    y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
 
   grid_root_property_ = new rviz_common::properties::Property(
     "Grid", QVariant(), "Plot grid density and visibility.", this);
@@ -828,34 +828,34 @@ Plot2DDisplay::Plot2DDisplay()
     "Layout", QVariant(), "Overlay size and screen position.", this);
   width_property_ = new rviz_common::properties::IntProperty(
     "Width", 360, "Overlay width in pixels.", layout_root_property_,
-    SLOT(onConfigPropertyChanged()), this, 120);
+    SLOT(onRenderPropertyChanged()), this, 120);
   height_property_ = new rviz_common::properties::IntProperty(
     "Height", 220, "Overlay height in pixels.", layout_root_property_,
-    SLOT(onConfigPropertyChanged()), this, 80);
+    SLOT(onRenderPropertyChanged()), this, 80);
   x_offset_property_ = new rviz_common::properties::IntProperty(
     "X Offset", 10, "Horizontal screen offset in pixels.", layout_root_property_,
-    SLOT(onConfigPropertyChanged()), this);
+    SLOT(onRenderPropertyChanged()), this);
   y_offset_property_ = new rviz_common::properties::IntProperty(
     "Y Offset", 10, "Vertical screen offset in pixels.", layout_root_property_,
-    SLOT(onConfigPropertyChanged()), this);
+    SLOT(onRenderPropertyChanged()), this);
   horizontal_alignment_property_ = new rviz_common::properties::EnumProperty(
     "Horizontal Alignment",
     QString::fromStdString(horizontalAlignmentName(HorizontalAlignment::Right)),
     "Horizontal screen anchor used by X Offset.",
-    layout_root_property_, SLOT(onConfigPropertyChanged()), this);
+    layout_root_property_, SLOT(onRenderPropertyChanged()), this);
   addHorizontalAlignmentOptions(horizontal_alignment_property_);
   vertical_alignment_property_ = new rviz_common::properties::EnumProperty(
     "Vertical Alignment",
     QString::fromStdString(verticalAlignmentName(VerticalAlignment::Top)),
     "Vertical screen anchor used by Y Offset.",
-    layout_root_property_, SLOT(onConfigPropertyChanged()), this);
+    layout_root_property_, SLOT(onRenderPropertyChanged()), this);
   addVerticalAlignmentOptions(vertical_alignment_property_);
 
   style_root_property_ = new rviz_common::properties::Property(
     "Style", QVariant(), "Plot colors.", this);
   background_color_property_ = new rviz_common::properties::ColorProperty(
     "Background Color", QColor(0, 0, 0), "Plot background color.",
-    style_root_property_, SLOT(onConfigPropertyChanged()), this);
+    style_root_property_, SLOT(onRenderPropertyChanged()), this);
   background_alpha_property_ = new rviz_common::properties::FloatProperty(
     "Background Alpha", 190.0F / 255.0F, "Plot background opacity from 0 to 1.",
     style_root_property_, SLOT(onRenderPropertyChanged()), this);
@@ -863,13 +863,13 @@ Plot2DDisplay::Plot2DDisplay()
   background_alpha_property_->setMax(1.0F);
   axis_color_property_ = new rviz_common::properties::ColorProperty(
     "Axis Color", QColor(230, 230, 230), "Axis and border color.",
-    style_root_property_, SLOT(onConfigPropertyChanged()), this);
+    style_root_property_, SLOT(onRenderPropertyChanged()), this);
   grid_color_property_ = new rviz_common::properties::ColorProperty(
     "Grid Color", QColor(130, 130, 130), "Grid line color.",
-    style_root_property_, SLOT(onConfigPropertyChanged()), this);
+    style_root_property_, SLOT(onRenderPropertyChanged()), this);
   text_color_property_ = new rviz_common::properties::ColorProperty(
     "Text Color", QColor(245, 245, 245), "Axis and legend text color.",
-    style_root_property_, SLOT(onConfigPropertyChanged()), this);
+    style_root_property_, SLOT(onRenderPropertyChanged()), this);
   font_size_property_ = new rviz_common::properties::IntProperty(
     "Font Size", 8, "Axis, legend, and reference label font size in points.",
     style_root_property_, SLOT(onRenderPropertyChanged()), this, 6, 16);
@@ -990,6 +990,18 @@ void Plot2DDisplay::onRenderPropertyChanged()
   renderOverlay_();
 }
 
+void Plot2DDisplay::onSeriesAppearancePropertyChanged()
+{
+  updateSeriesPropertySummaries_();
+  renderOverlay_();
+}
+
+void Plot2DDisplay::onReferencePropertyChanged()
+{
+  updateReferencePropertySummaries_();
+  renderOverlay_();
+}
+
 void Plot2DDisplay::onPlotModeChanged()
 {
   updateModePropertyVisibility_();
@@ -1095,7 +1107,7 @@ void Plot2DDisplay::onReferenceCountChanged()
 {
   const std::vector<ReferenceConfig> current = referenceConfigFromProperties_();
   rebuildReferenceProperties_(reference_count_property_->getInt(), current);
-  onConfigPropertyChanged();
+  onReferencePropertyChanged();
 }
 
 void Plot2DDisplay::onDuplicateReferenceChanged()
@@ -1135,7 +1147,7 @@ void Plot2DDisplay::onDuplicateReferenceChanged()
     this,
     [this, references = std::move(references)]() mutable {
       replaceReferenceProperties_(references);
-      onConfigPropertyChanged();
+      onReferencePropertyChanged();
     });
 }
 
@@ -1172,7 +1184,7 @@ void Plot2DDisplay::onDeleteReferenceChanged()
     this,
     [this, references = std::move(references)]() mutable {
       replaceReferenceProperties_(references);
-      onConfigPropertyChanged();
+      onReferencePropertyChanged();
     });
 }
 
@@ -1394,29 +1406,29 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       &Plot2DDisplay::onFieldOptionsRequested);
     properties.label = new rviz_common::properties::StringProperty(
       "Label", QString::fromStdString(value.label), "Legend label for this series.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     properties.unit = new rviz_common::properties::StringProperty(
       "Unit", QString::fromStdString(value.unit), "Optional legend unit shown after values.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     properties.color = new rviz_common::properties::ColorProperty(
       "Color", toQColor(value.color), "Series line color.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     properties.line_width = new rviz_common::properties::FloatProperty(
       "Line Width", value.line_width, "Series line width in pixels.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     properties.line_width->setMin(1.0F);
     properties.line_alpha = new rviz_common::properties::FloatProperty(
       "Line Alpha", value.line_alpha, "Series line opacity from 0 to 1.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     properties.line_alpha->setMin(0.0F);
     properties.line_alpha->setMax(1.0F);
     properties.line_style = new rviz_common::properties::EnumProperty(
       "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
-      "Series line pattern.", properties.root, SLOT(onConfigPropertyChanged()), this);
+      "Series line pattern.", properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     addLineStyleOptions(properties.line_style);
     properties.plot_style = new rviz_common::properties::EnumProperty(
       "Plot Style", QString::fromStdString(plotStyleName(value.plot_style)),
-      "Series rendering mode.", properties.root, SLOT(onConfigPropertyChanged()), this);
+      "Series rendering mode.", properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
     addPlotStyleOptions(properties.plot_style);
     properties.value_scale = new rviz_common::properties::FloatProperty(
       "Value Scale", value.value_scale, "Scale applied to extracted values before plotting.",
@@ -1465,7 +1477,7 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     const QString name = "Reference " + QString::number(i + 1);
     properties.root = new ListItemBoolProperty(
       name, value.enabled, "Enable this reference line.", references_root_property_,
-      SLOT(onConfigPropertyChanged()), this);
+      SLOT(onReferencePropertyChanged()), this);
     properties.duplicate = new rviz_common::properties::BoolProperty(
       "Duplicate", false, "Duplicate this reference.",
       properties.root, SLOT(onDuplicateReferenceChanged()), this);
@@ -1477,30 +1489,30 @@ void Plot2DDisplay::rebuildReferenceProperties_(
     properties.value = new rviz_common::properties::FloatProperty(
       kReferenceValuePropertyName, value.value, "Y-axis value for this reference line.",
       properties.root,
-      SLOT(onConfigPropertyChanged()), this);
+      SLOT(onReferencePropertyChanged()), this);
     properties.tolerance = new rviz_common::properties::FloatProperty(
       "Tolerance", value.tolerance,
       "Optional symmetric tolerance around the reference value.", properties.root,
-      SLOT(onConfigPropertyChanged()), this);
+      SLOT(onReferencePropertyChanged()), this);
     properties.tolerance->setMin(0.0F);
     properties.label = new rviz_common::properties::StringProperty(
       "Label", QString::fromStdString(value.label), "Reference label.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onReferencePropertyChanged()), this);
     properties.color = new rviz_common::properties::ColorProperty(
       "Color", toQColor(value.color), "Reference line color.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onReferencePropertyChanged()), this);
     properties.alpha = new rviz_common::properties::FloatProperty(
       "Alpha", value.alpha, "Reference line opacity from 0 to 1.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onReferencePropertyChanged()), this);
     properties.alpha->setMin(0.0F);
     properties.alpha->setMax(1.0F);
     properties.line_width = new rviz_common::properties::FloatProperty(
       "Line Width", value.line_width, "Reference line width in pixels.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+      properties.root, SLOT(onReferencePropertyChanged()), this);
     properties.line_width->setMin(1.0F);
     properties.line_style = new rviz_common::properties::EnumProperty(
       "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
-      "Reference line pattern.", properties.root, SLOT(onConfigPropertyChanged()), this);
+      "Reference line pattern.", properties.root, SLOT(onReferencePropertyChanged()), this);
     addLineStyleOptions(properties.line_style);
     reference_properties_.push_back(properties);
   }
@@ -1539,7 +1551,7 @@ void Plot2DDisplay::appendReferencePreset_()
   }
 
   replaceReferenceProperties_(references);
-  onConfigPropertyChanged();
+  onReferencePropertyChanged();
 }
 
 void Plot2DDisplay::updateModePropertyVisibility_()
@@ -1662,7 +1674,7 @@ void Plot2DDisplay::scheduleReferenceOrderSync_()
     [this]() {
       reference_order_sync_pending_ = false;
       if (syncReferencePropertyOrder_()) {
-        onConfigPropertyChanged();
+        onReferencePropertyChanged();
       }
     });
 }
@@ -1860,9 +1872,9 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeriesFromSnapshot_(
     RenderableSeries series;
     series.enabled = i < snapshot.config.series.size() && snapshot.config.series[i].enabled;
     if (i < snapshot.config.series.size()) {
-      series.label = source.label.empty() ?
+      series.label = snapshot.config.series[i].label.empty() ?
         seriesDefaultLabel(snapshot.config.series[i], snapshot.config.plot_mode) :
-        source.label;
+        snapshot.config.series[i].label;
       if (series.label.empty()) {
         series.label = "Series";
       }

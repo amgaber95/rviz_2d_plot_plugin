@@ -28,6 +28,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/float64.hpp>
 
 #include <rviz_common/config.hpp>
@@ -203,6 +204,11 @@ public:
   static std::vector<RenderableSeries> renderableSeries(Plot2DDisplay & display)
   {
     return display.renderableSeries_();
+  }
+
+  static std::vector<RenderableReference> renderableReferences(Plot2DDisplay & display)
+  {
+    return display.renderableReferences_();
   }
 
   static auto renderSnapshot(Plot2DDisplay & display)
@@ -1446,6 +1452,238 @@ TEST(Plot2DDisplay, RenderSnapshotCombinesPropertyConfigAndControllerSamples)
   ASSERT_EQ(snapshot.controller_state.series.size(), 1U);
   ASSERT_EQ(snapshot.controller_state.series[0].samples.size(), 1U);
   EXPECT_DOUBLE_EQ(snapshot.controller_state.series[0].samples.samples().front().value, 2.75);
+}
+
+TEST(Plot2DDisplay, SeriesDragDropPreservesControllerSamplesBySource)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_root = Plot2DDisplayTestAccessor::seriesRoot(display);
+  auto * series_count = findChild(series_root, "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(2);
+  auto * series_1 = findChild(series_root, "Series 1");
+  auto * series_2 = findChild(series_root, "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  findChild(series_1, "Topic")->setValue("/cmd_vel");
+  findChild(series_1, "Field")->setValue("linear/x");
+  findChild(series_1, "Label")->setValue("Linear X");
+  findChild(series_2, "Topic")->setValue("/cmd_vel");
+  findChild(series_2, "Field")->setValue("angular/z");
+  findChild(series_2, "Label")->setValue("Angular Z");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/cmd_vel", {"geometry_msgs/msg/Twist"}}});
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+
+  geometry_msgs::msg::Twist message;
+  message.linear.x = 1.5;
+  message.angular.z = -0.4;
+  Plot2DDisplayTestAccessor::onSerializedMessage(
+    display, "/cmd_vel", serializeMessage(message));
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[1].samples.size(), 1U);
+
+  rviz_common::properties::Property * moved = series_root->takeChildAt(2);
+  ASSERT_NE(nullptr, moved);
+  series_root->addChild(moved, 1);
+  processQtEvents();
+
+  const auto snapshot = Plot2DDisplayTestAccessor::renderSnapshot(display);
+  ASSERT_EQ(snapshot.config.series.size(), 2U);
+  ASSERT_EQ(snapshot.controller_state.series.size(), 2U);
+  EXPECT_EQ(snapshot.config.series[0].field, "angular/z");
+  EXPECT_EQ(snapshot.config.series[1].field, "linear/x");
+  ASSERT_EQ(snapshot.controller_state.series[0].samples.size(), 1U);
+  ASSERT_EQ(snapshot.controller_state.series[1].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(snapshot.controller_state.series[0].samples.samples().front().value, -0.4);
+  EXPECT_DOUBLE_EQ(snapshot.controller_state.series[1].samples.samples().front().value, 1.5);
+}
+
+TEST(Plot2DDisplay, ReferenceAppearanceEditsDoNotRecreateSubscriptions)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(display);
+  ASSERT_NE(nullptr, series);
+  ASSERT_NE(nullptr, references_root);
+  findChild(references_root, "Reference Count")->setValue(1);
+  auto * reference = findChild(references_root, "Reference 1");
+  ASSERT_NE(nullptr, reference);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  int created = 0;
+  std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> callback;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&created, &callback](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> created_callback)
+    {
+      ++created;
+      callback = std::move(created_callback);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+  ASSERT_EQ(created, 1);
+  ASSERT_TRUE(callback);
+
+  std_msgs::msg::Float64 message;
+  message.data = 4.0;
+  callback(serializeMessage(message));
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  created = 0;
+
+  findChild(reference, "Y Value")->setValue(2.0);
+  findChild(reference, "Tolerance")->setValue(0.25);
+  findChild(reference, "Label")->setValue("Limit");
+  findChild(reference, "Color")->setValue(QColor(20, 200, 80));
+  findChild(reference, "Alpha")->setValue(0.5);
+  findChild(reference, "Line Width")->setValue(2.0);
+  findChild(reference, "Line Style")->setValue("Dash");
+
+  EXPECT_EQ(created, 0);
+  EXPECT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  const auto references = Plot2DDisplayTestAccessor::renderableReferences(display);
+  ASSERT_EQ(references.size(), 1U);
+  EXPECT_DOUBLE_EQ(references[0].value, 2.0);
+  EXPECT_NEAR(references[0].tolerance, 0.25, 1e-6);
+  EXPECT_EQ(references[0].label, "Limit");
+  EXPECT_EQ(references[0].color.red(), 20);
+  EXPECT_EQ(references[0].color.green(), 200);
+  EXPECT_EQ(references[0].color.blue(), 80);
+  EXPECT_NEAR(references[0].color.alphaF(), 0.5, 0.01);
+  EXPECT_DOUBLE_EQ(references[0].line_width, 2.0);
+  EXPECT_EQ(references[0].line_style, rviz_2d_plot_plugin::LineStyle::Dash);
+}
+
+TEST(Plot2DDisplay, SeriesAppearanceEditsDoNotRecreateSubscriptions)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  findChild(series, "Label")->setValue("Speed");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  int created = 0;
+  std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> callback;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&created, &callback](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> created_callback)
+    {
+      ++created;
+      callback = std::move(created_callback);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+  ASSERT_EQ(created, 1);
+  ASSERT_TRUE(callback);
+
+  std_msgs::msg::Float64 message;
+  message.data = 3.5;
+  callback(serializeMessage(message));
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  created = 0;
+
+  findChild(series, "Label")->setValue("Velocity");
+  findChild(series, "Unit")->setValue("m/s");
+  findChild(series, "Color")->setValue(QColor(255, 80, 20));
+  findChild(series, "Line Width")->setValue(3.0);
+  findChild(series, "Line Alpha")->setValue(0.5);
+  findChild(series, "Line Style")->setValue("Dot");
+  findChild(series, "Plot Style")->setValue("Step");
+
+  EXPECT_EQ(created, 0);
+  EXPECT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  const auto renderable = Plot2DDisplayTestAccessor::renderableSeries(display);
+  ASSERT_EQ(renderable.size(), 1U);
+  EXPECT_EQ(renderable[0].label, "Velocity");
+  EXPECT_EQ(renderable[0].unit, "m/s");
+  EXPECT_EQ(renderable[0].color.red(), 255);
+  EXPECT_EQ(renderable[0].color.green(), 80);
+  EXPECT_EQ(renderable[0].color.blue(), 20);
+  EXPECT_NEAR(renderable[0].color.alphaF(), 0.5, 0.01);
+  EXPECT_DOUBLE_EQ(renderable[0].line_width, 3.0);
+  EXPECT_EQ(renderable[0].line_style, rviz_2d_plot_plugin::LineStyle::Dot);
+  EXPECT_EQ(renderable[0].plot_style, rviz_2d_plot_plugin::PlotStyle::Step);
+  ASSERT_EQ(renderable[0].samples.size(), 1U);
+  EXPECT_DOUBLE_EQ(renderable[0].samples.front().value, 3.5);
+}
+
+TEST(Plot2DDisplay, OverlayRenderEditsDoNotRecreateSubscriptions)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
+  ASSERT_NE(nullptr, series);
+  findChild(series, "Topic")->setValue("/value");
+  findChild(series, "Field")->setValue("data");
+  Plot2DDisplayTestAccessor::setTopics(
+    display, TopicTypeMap{{"/value", {"std_msgs/msg/Float64"}}});
+
+  int created = 0;
+  std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> callback;
+  Plot2DDisplayTestAccessor::setSubscriptionFactory(
+    display,
+    [&created, &callback](
+      const std::string &,
+      const std::string &,
+      rclcpp::QoS,
+      std::function<void(std::shared_ptr<rclcpp::SerializedMessage>)> created_callback)
+    {
+      ++created;
+      callback = std::move(created_callback);
+      return rclcpp::GenericSubscription::SharedPtr{};
+    });
+  Plot2DDisplayTestAccessor::resolveAndSubscribe(display);
+  ASSERT_EQ(created, 1);
+  ASSERT_TRUE(callback);
+
+  std_msgs::msg::Float64 message;
+  message.data = 9.0;
+  callback(serializeMessage(message));
+  ASSERT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  created = 0;
+
+  findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Width")->setValue(420);
+  findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Height")->setValue(180);
+  findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale")->setValue(false);
+  findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Min")->setValue(-2.0);
+  findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Max")->setValue(2.0);
+  findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Minor Divisions")->setValue(3);
+
+  EXPECT_EQ(created, 0);
+  EXPECT_EQ(
+    Plot2DDisplayTestAccessor::controllerState(display).series[0].samples.size(), 1U);
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_EQ(settings.width, 420);
+  EXPECT_EQ(settings.height, 180);
+  EXPECT_EQ(settings.y_scale_mode, AxisScaleMode::Fixed);
+  EXPECT_DOUBLE_EQ(settings.fixed_y_min, -2.0);
+  EXPECT_DOUBLE_EQ(settings.fixed_y_max, 2.0);
+  EXPECT_EQ(settings.minor_grid_divisions, 3);
 }
 
 TEST(Plot2DDisplay, HeaderStampRenderWindowUsesNewestSampleTime)
