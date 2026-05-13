@@ -120,12 +120,20 @@ if(BUILD_TESTING)
   target_link_libraries(test_plot_2d_controller ${PROJECT_NAME})
   ament_target_dependencies(test_plot_2d_controller rclcpp geometry_msgs)
 
-  ament_add_gtest(test_plot_2d_display test/test_plot_2d_display.cpp)
-  target_include_directories(test_plot_2d_display PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-  )
-  target_link_libraries(test_plot_2d_display ${PROJECT_NAME})
-  ament_target_dependencies(test_plot_2d_display rclcpp geometry_msgs std_msgs)
+  foreach(display_test
+      test_plot_2d_display_properties
+      test_plot_2d_display_interactions
+      test_plot_2d_display_rendering
+      test_plot_2d_display_subscriptions
+      test_plot_2d_display_topics)
+    ament_add_gtest(${display_test} test/${display_test}.cpp)
+    target_include_directories(${display_test} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/test
+    )
+    target_link_libraries(${display_test} ${PROJECT_NAME})
+    ament_target_dependencies(${display_test} rclcpp geometry_msgs std_msgs)
+  endforeach()
 
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
   target_link_libraries(test_plot_range ${PROJECT_NAME})
