@@ -133,14 +133,22 @@ private:
   std::vector<SeriesConfig> seriesConfigFromProperties_() const;
   std::vector<ReferenceConfig> referenceConfigFromProperties_() const;
   Plot2DConfig configFromProperties_() const;
+  SeriesPropertySet makeSeriesPropertySet_(int row, const SeriesConfig & value);
+  ReferencePropertySet makeReferencePropertySet_(int row, const ReferenceConfig & value);
   void rebuildSeriesProperties_(
     int count,
     const std::vector<SeriesConfig> & values);
-  void replaceSeriesProperties_(const std::vector<SeriesConfig> & values);
+  void resizeSeriesProperties_(int count, const std::vector<SeriesConfig> & values);
+  void insertSeriesProperty_(std::size_t index, const SeriesConfig & value);
+  void removeSeriesProperty_(std::size_t index);
+  void renameSeriesPropertyRows_();
   void rebuildReferenceProperties_(
     int count,
     const std::vector<ReferenceConfig> & values);
-  void replaceReferenceProperties_(const std::vector<ReferenceConfig> & values);
+  void resizeReferenceProperties_(int count, const std::vector<ReferenceConfig> & values);
+  void insertReferenceProperty_(std::size_t index, const ReferenceConfig & value);
+  void removeReferenceProperty_(std::size_t index);
+  void renameReferencePropertyRows_();
   void appendReferencePreset_();
   void updateModePropertyVisibility_();
   void updateSeriesPropertySummaries_();

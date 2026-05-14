@@ -78,34 +78,6 @@ std::string statusText(const Plot2DControllerState & state)
   return "Waiting for a topic and field selection";
 }
 
-template<typename PropertySet>
-std::vector<bool> rowExpansionStates(const std::vector<PropertySet> & properties)
-{
-  std::vector<bool> expanded;
-  expanded.reserve(properties.size());
-  for (const PropertySet & property_set : properties) {
-    expanded.push_back(property_set.root && property_set.root->isExpanded());
-  }
-  return expanded;
-}
-
-template<typename PropertySet>
-void applyRowExpansionStates(
-  const std::vector<PropertySet> & properties,
-  const std::vector<bool> & expanded)
-{
-  for (std::size_t i = 0; i < properties.size() && i < expanded.size(); ++i) {
-    if (!properties[i].root) {
-      continue;
-    }
-    if (expanded[i]) {
-      properties[i].root->expand();
-    } else {
-      properties[i].root->collapse();
-    }
-  }
-}
-
 }  // namespace
 
 Plot2DDisplay::Plot2DDisplay()
@@ -470,9 +442,7 @@ void Plot2DDisplay::onPlotModeChanged()
 void Plot2DDisplay::onSeriesCountChanged()
 {
   const std::vector<SeriesConfig> current = seriesConfigFromProperties_();
-  std::vector<bool> expanded = rowExpansionStates(series_properties_);
-  rebuildSeriesProperties_(series_count_property_->getInt(), current);
-  applyRowExpansionStates(series_properties_, expanded);
+  resizeSeriesProperties_(series_count_property_->getInt(), current);
   onConfigPropertyChanged();
 }
 
@@ -505,19 +475,16 @@ void Plot2DDisplay::onDuplicateSeriesChanged()
 
   SeriesConfig copy = series[index];
   copy.label = copy.label.empty() ? "Series Copy" : copy.label + " Copy";
-  series.insert(series.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
-  std::vector<bool> expanded = rowExpansionStates(series_properties_);
-  if (index < expanded.size()) {
-    expanded.insert(
-      expanded.begin() + static_cast<std::ptrdiff_t>(index + 1), expanded[index]);
+  {
+    const QSignalBlocker blocker(duplicate_property);
+    duplicate_property->setBool(false);
   }
 
   QTimer::singleShot(
     0,
     this,
-    [this, series = std::move(series), expanded = std::move(expanded)]() mutable {
-      replaceSeriesProperties_(series);
-      applyRowExpansionStates(series_properties_, expanded);
+    [this, index, copy = std::move(copy)]() mutable {
+      insertSeriesProperty_(index + 1U, copy);
       onConfigPropertyChanged();
     });
 }
@@ -548,18 +515,11 @@ void Plot2DDisplay::onDeleteSeriesChanged()
     return;
   }
 
-  series.erase(series.begin() + static_cast<std::ptrdiff_t>(index));
-  std::vector<bool> expanded = rowExpansionStates(series_properties_);
-  if (index < expanded.size()) {
-    expanded.erase(expanded.begin() + static_cast<std::ptrdiff_t>(index));
-  }
-
   QTimer::singleShot(
     0,
     this,
-    [this, series = std::move(series), expanded = std::move(expanded)]() mutable {
-      replaceSeriesProperties_(series);
-      applyRowExpansionStates(series_properties_, expanded);
+    [this, index]() {
+      removeSeriesProperty_(index);
       onConfigPropertyChanged();
     });
 }
@@ -578,9 +538,7 @@ void Plot2DDisplay::onApplyReferencePresetChanged()
 void Plot2DDisplay::onReferenceCountChanged()
 {
   const std::vector<ReferenceConfig> current = referenceConfigFromProperties_();
-  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
-  rebuildReferenceProperties_(reference_count_property_->getInt(), current);
-  applyRowExpansionStates(reference_properties_, expanded);
+  resizeReferenceProperties_(reference_count_property_->getInt(), current);
   onReferencePropertyChanged();
 }
 
@@ -614,19 +572,16 @@ void Plot2DDisplay::onDuplicateReferenceChanged()
   if (!copy.label.empty()) {
     copy.label += " Copy";
   }
-  references.insert(references.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
-  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
-  if (index < expanded.size()) {
-    expanded.insert(
-      expanded.begin() + static_cast<std::ptrdiff_t>(index + 1), expanded[index]);
+  {
+    const QSignalBlocker blocker(duplicate_property);
+    duplicate_property->setBool(false);
   }
 
   QTimer::singleShot(
     0,
     this,
-    [this, references = std::move(references), expanded = std::move(expanded)]() mutable {
-      replaceReferenceProperties_(references);
-      applyRowExpansionStates(reference_properties_, expanded);
+    [this, index, copy = std::move(copy)]() mutable {
+      insertReferenceProperty_(index + 1U, copy);
       onReferencePropertyChanged();
     });
 }
@@ -657,18 +612,11 @@ void Plot2DDisplay::onDeleteReferenceChanged()
     return;
   }
 
-  references.erase(references.begin() + static_cast<std::ptrdiff_t>(index));
-  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
-  if (index < expanded.size()) {
-    expanded.erase(expanded.begin() + static_cast<std::ptrdiff_t>(index));
-  }
-
   QTimer::singleShot(
     0,
     this,
-    [this, references = std::move(references), expanded = std::move(expanded)]() mutable {
-      replaceReferenceProperties_(references);
-      applyRowExpansionStates(reference_properties_, expanded);
+    [this, index]() {
+      removeReferenceProperty_(index);
       onReferencePropertyChanged();
     });
 }
@@ -821,12 +769,150 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   return config;
 }
 
+Plot2DDisplay::SeriesPropertySet Plot2DDisplay::makeSeriesPropertySet_(
+  const int row,
+  const SeriesConfig & value)
+{
+  SeriesPropertySet properties;
+  const QString name = "Series " + QString::number(row + 1);
+  properties.root = new ListItemBoolProperty(
+    name, value.enabled, "Enable this plotted topic field.", nullptr,
+    SLOT(onConfigPropertyChanged()), this);
+  properties.duplicate = new rviz_common::properties::BoolProperty(
+    "Duplicate", false, "Duplicate this series.",
+    properties.root, SLOT(onDuplicateSeriesChanged()), this);
+  properties.duplicate->setShouldBeSaved(false);
+  properties.delete_series = new rviz_common::properties::BoolProperty(
+    "Delete", false, "Delete this series.",
+    properties.root, SLOT(onDeleteSeriesChanged()), this);
+  properties.delete_series->setShouldBeSaved(false);
+  properties.topic = new ContainsFilterEditableEnumProperty(
+    "Topic", QString::fromStdString(value.topic), "ROS 2 topic to subscribe to.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  QObject::connect(
+    properties.topic,
+    &rviz_common::properties::EditableEnumProperty::requestOptions,
+    this,
+    &Plot2DDisplay::onTopicOptionsRequested);
+  properties.field = new ContainsFilterEditableEnumProperty(
+    "Field", QString::fromStdString(value.field),
+    "Numeric or boolean field path inside the selected message.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  QObject::connect(
+    properties.field,
+    &rviz_common::properties::EditableEnumProperty::requestOptions,
+    this,
+    &Plot2DDisplay::onFieldOptionsRequested);
+  properties.x_field = new ContainsFilterEditableEnumProperty(
+    "X Field", QString::fromStdString(value.x_field),
+    "Numeric field used for the x-axis in XY mode.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  QObject::connect(
+    properties.x_field,
+    &rviz_common::properties::EditableEnumProperty::requestOptions,
+    this,
+    &Plot2DDisplay::onFieldOptionsRequested);
+  properties.y_field = new ContainsFilterEditableEnumProperty(
+    "Y Field", QString::fromStdString(value.y_field),
+    "Numeric or boolean field used for the y-axis in XY mode.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  QObject::connect(
+    properties.y_field,
+    &rviz_common::properties::EditableEnumProperty::requestOptions,
+    this,
+    &Plot2DDisplay::onFieldOptionsRequested);
+  properties.label = new rviz_common::properties::StringProperty(
+    "Label", QString::fromStdString(value.label), "Legend label for this series.",
+    properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  properties.unit = new rviz_common::properties::StringProperty(
+    "Unit", QString::fromStdString(value.unit), "Optional legend unit shown after values.",
+    properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  properties.color = new rviz_common::properties::ColorProperty(
+    "Color", toQColor(value.color), "Series line color.",
+    properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  properties.line_width = new rviz_common::properties::FloatProperty(
+    "Line Width", value.line_width, "Series line width in pixels.",
+    properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  properties.line_width->setMin(static_cast<float>(kMinimumLineWidth));
+  properties.line_width->setMax(static_cast<float>(kMaximumLineWidth));
+  properties.line_alpha = new rviz_common::properties::FloatProperty(
+    "Line Alpha", value.line_alpha, "Series line opacity from 0 to 1.",
+    properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  properties.line_alpha->setMin(0.0F);
+  properties.line_alpha->setMax(1.0F);
+  properties.line_style = new rviz_common::properties::EnumProperty(
+    "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
+    "Series line pattern.", properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  addLineStyleOptions(properties.line_style);
+  properties.plot_style = new rviz_common::properties::EnumProperty(
+    "Plot Style", QString::fromStdString(plotStyleName(value.plot_style)),
+    "Series rendering mode.", properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
+  addPlotStyleOptions(properties.plot_style);
+  properties.value_scale = new rviz_common::properties::FloatProperty(
+    "Value Scale", value.value_scale, "Scale applied to extracted values before plotting.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  properties.value_offset = new rviz_common::properties::FloatProperty(
+    "Value Offset", value.value_offset, "Offset added after scaling extracted values.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  return properties;
+}
+
+Plot2DDisplay::ReferencePropertySet Plot2DDisplay::makeReferencePropertySet_(
+  const int row,
+  const ReferenceConfig & value)
+{
+  ReferencePropertySet properties;
+  const QString name = "Reference " + QString::number(row + 1);
+  properties.root = new ListItemBoolProperty(
+    name, value.enabled, "Enable this reference line.", nullptr,
+    SLOT(onReferencePropertyChanged()), this);
+  properties.duplicate = new rviz_common::properties::BoolProperty(
+    "Duplicate", false, "Duplicate this reference.",
+    properties.root, SLOT(onDuplicateReferenceChanged()), this);
+  properties.duplicate->setShouldBeSaved(false);
+  properties.delete_reference = new rviz_common::properties::BoolProperty(
+    "Delete", false, "Delete this reference.",
+    properties.root, SLOT(onDeleteReferenceChanged()), this);
+  properties.delete_reference->setShouldBeSaved(false);
+  properties.value = new rviz_common::properties::FloatProperty(
+    kReferenceValuePropertyName, value.value, "Y-axis value for this reference line.",
+    properties.root,
+    SLOT(onReferencePropertyChanged()), this);
+  properties.tolerance = new rviz_common::properties::FloatProperty(
+    "Tolerance", value.tolerance,
+    "Optional symmetric tolerance around the reference value.", properties.root,
+    SLOT(onReferencePropertyChanged()), this);
+  properties.tolerance->setMin(0.0F);
+  properties.label = new rviz_common::properties::StringProperty(
+    "Label", QString::fromStdString(value.label), "Reference label.",
+    properties.root, SLOT(onReferencePropertyChanged()), this);
+  properties.color = new rviz_common::properties::ColorProperty(
+    "Color", toQColor(value.color), "Reference line color.",
+    properties.root, SLOT(onReferencePropertyChanged()), this);
+  properties.alpha = new rviz_common::properties::FloatProperty(
+    "Alpha", value.alpha, "Reference line opacity from 0 to 1.",
+    properties.root, SLOT(onReferencePropertyChanged()), this);
+  properties.alpha->setMin(0.0F);
+  properties.alpha->setMax(1.0F);
+  properties.line_width = new rviz_common::properties::FloatProperty(
+    "Line Width", value.line_width, "Reference line width in pixels.",
+    properties.root, SLOT(onReferencePropertyChanged()), this);
+  properties.line_width->setMin(static_cast<float>(kMinimumLineWidth));
+  properties.line_width->setMax(static_cast<float>(kMaximumLineWidth));
+  properties.line_style = new rviz_common::properties::EnumProperty(
+    "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
+    "Reference line pattern.", properties.root, SLOT(onReferencePropertyChanged()), this);
+  addLineStyleOptions(properties.line_style);
+  return properties;
+}
+
 void Plot2DDisplay::rebuildSeriesProperties_(
   const int count,
   const std::vector<SeriesConfig> & values)
 {
   const int repaired_count = std::clamp(count, 1, 12);
-  if (series_count_property_->getInt() != repaired_count) {
+  {
+    const QSignalBlocker blocker(series_count_property_);
     series_count_property_->setInt(repaired_count);
   }
 
@@ -849,87 +935,8 @@ void Plot2DDisplay::rebuildSeriesProperties_(
       value.color = defaultSeriesColor(static_cast<std::size_t>(i));
     }
 
-    SeriesPropertySet properties;
-    const QString name = "Series " + QString::number(i + 1);
-    properties.root = new ListItemBoolProperty(
-      name, value.enabled, "Enable this plotted topic field.", series_root_property_,
-      SLOT(onConfigPropertyChanged()), this);
-    properties.duplicate = new rviz_common::properties::BoolProperty(
-      "Duplicate", false, "Duplicate this series.",
-      properties.root, SLOT(onDuplicateSeriesChanged()), this);
-    properties.duplicate->setShouldBeSaved(false);
-    properties.delete_series = new rviz_common::properties::BoolProperty(
-      "Delete", false, "Delete this series.",
-      properties.root, SLOT(onDeleteSeriesChanged()), this);
-    properties.delete_series->setShouldBeSaved(false);
-    properties.topic = new ContainsFilterEditableEnumProperty(
-      "Topic", QString::fromStdString(value.topic), "ROS 2 topic to subscribe to.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
-    QObject::connect(
-      properties.topic,
-      &rviz_common::properties::EditableEnumProperty::requestOptions,
-      this,
-      &Plot2DDisplay::onTopicOptionsRequested);
-    properties.field = new ContainsFilterEditableEnumProperty(
-      "Field", QString::fromStdString(value.field),
-      "Numeric or boolean field path inside the selected message.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
-    QObject::connect(
-      properties.field,
-      &rviz_common::properties::EditableEnumProperty::requestOptions,
-      this,
-      &Plot2DDisplay::onFieldOptionsRequested);
-    properties.x_field = new ContainsFilterEditableEnumProperty(
-      "X Field", QString::fromStdString(value.x_field),
-      "Numeric field used for the x-axis in XY mode.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
-    QObject::connect(
-      properties.x_field,
-      &rviz_common::properties::EditableEnumProperty::requestOptions,
-      this,
-      &Plot2DDisplay::onFieldOptionsRequested);
-    properties.y_field = new ContainsFilterEditableEnumProperty(
-      "Y Field", QString::fromStdString(value.y_field),
-      "Numeric or boolean field used for the y-axis in XY mode.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
-    QObject::connect(
-      properties.y_field,
-      &rviz_common::properties::EditableEnumProperty::requestOptions,
-      this,
-      &Plot2DDisplay::onFieldOptionsRequested);
-    properties.label = new rviz_common::properties::StringProperty(
-      "Label", QString::fromStdString(value.label), "Legend label for this series.",
-      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    properties.unit = new rviz_common::properties::StringProperty(
-      "Unit", QString::fromStdString(value.unit), "Optional legend unit shown after values.",
-      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    properties.color = new rviz_common::properties::ColorProperty(
-      "Color", toQColor(value.color), "Series line color.",
-      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    properties.line_width = new rviz_common::properties::FloatProperty(
-      "Line Width", value.line_width, "Series line width in pixels.",
-      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    properties.line_width->setMin(static_cast<float>(kMinimumLineWidth));
-    properties.line_width->setMax(static_cast<float>(kMaximumLineWidth));
-    properties.line_alpha = new rviz_common::properties::FloatProperty(
-      "Line Alpha", value.line_alpha, "Series line opacity from 0 to 1.",
-      properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    properties.line_alpha->setMin(0.0F);
-    properties.line_alpha->setMax(1.0F);
-    properties.line_style = new rviz_common::properties::EnumProperty(
-      "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
-      "Series line pattern.", properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    addLineStyleOptions(properties.line_style);
-    properties.plot_style = new rviz_common::properties::EnumProperty(
-      "Plot Style", QString::fromStdString(plotStyleName(value.plot_style)),
-      "Series rendering mode.", properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
-    addPlotStyleOptions(properties.plot_style);
-    properties.value_scale = new rviz_common::properties::FloatProperty(
-      "Value Scale", value.value_scale, "Scale applied to extracted values before plotting.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
-    properties.value_offset = new rviz_common::properties::FloatProperty(
-      "Value Offset", value.value_offset, "Offset added after scaling extracted values.",
-      properties.root, SLOT(onConfigPropertyChanged()), this);
+    SeriesPropertySet properties = makeSeriesPropertySet_(i, value);
+    series_root_property_->addChild(properties.root);
     series_properties_.push_back(properties);
   }
   rebuilding_series_properties_ = false;
@@ -937,14 +944,81 @@ void Plot2DDisplay::rebuildSeriesProperties_(
   updateSeriesPropertySummaries_();
 }
 
-void Plot2DDisplay::replaceSeriesProperties_(const std::vector<SeriesConfig> & values)
+void Plot2DDisplay::resizeSeriesProperties_(
+  const int count,
+  const std::vector<SeriesConfig> & values)
 {
-  const int count = static_cast<int>(std::clamp<std::size_t>(values.size(), 1U, 12U));
+  const int repaired_count = std::clamp(count, 1, 12);
   {
     const QSignalBlocker blocker(series_count_property_);
-    series_count_property_->setInt(count);
+    series_count_property_->setInt(repaired_count);
   }
-  rebuildSeriesProperties_(count, values);
+
+  while (series_properties_.size() > static_cast<std::size_t>(repaired_count)) {
+    removeSeriesProperty_(series_properties_.size() - 1U);
+  }
+  while (series_properties_.size() < static_cast<std::size_t>(repaired_count)) {
+    const std::size_t index = series_properties_.size();
+    SeriesConfig value;
+    if (index < values.size()) {
+      value = values[index];
+    } else {
+      value.label.clear();
+      value.color = defaultSeriesColor(index);
+    }
+    insertSeriesProperty_(index, value);
+  }
+  updateModePropertyVisibility_();
+  updateSeriesPropertySummaries_();
+}
+
+void Plot2DDisplay::insertSeriesProperty_(std::size_t index, const SeriesConfig & value)
+{
+  index = std::min(index, series_properties_.size());
+  const bool was_rebuilding = rebuilding_series_properties_;
+  rebuilding_series_properties_ = true;
+  SeriesPropertySet properties = makeSeriesPropertySet_(static_cast<int>(index), value);
+  series_root_property_->addChild(properties.root, static_cast<int>(index + 1U));
+  series_properties_.insert(
+    series_properties_.begin() + static_cast<std::ptrdiff_t>(index), properties);
+  renameSeriesPropertyRows_();
+  {
+    const QSignalBlocker blocker(series_count_property_);
+    series_count_property_->setInt(static_cast<int>(series_properties_.size()));
+  }
+  rebuilding_series_properties_ = was_rebuilding;
+  updateModePropertyVisibility_();
+  updateSeriesPropertySummaries_();
+}
+
+void Plot2DDisplay::removeSeriesProperty_(const std::size_t index)
+{
+  if (series_properties_.size() <= 1U || index >= series_properties_.size()) {
+    return;
+  }
+
+  const bool was_rebuilding = rebuilding_series_properties_;
+  rebuilding_series_properties_ = true;
+  delete series_root_property_->takeChildAt(static_cast<int>(index + 1U));
+  series_properties_.erase(series_properties_.begin() + static_cast<std::ptrdiff_t>(index));
+  renameSeriesPropertyRows_();
+  {
+    const QSignalBlocker blocker(series_count_property_);
+    series_count_property_->setInt(static_cast<int>(series_properties_.size()));
+  }
+  rebuilding_series_properties_ = was_rebuilding;
+  updateModePropertyVisibility_();
+  updateSeriesPropertySummaries_();
+}
+
+void Plot2DDisplay::renameSeriesPropertyRows_()
+{
+  for (std::size_t i = 0; i < series_properties_.size(); ++i) {
+    if (series_properties_[i].root) {
+      series_properties_[i].root->setName(
+        "Series " + QString::number(static_cast<int>(i) + 1));
+    }
+  }
 }
 
 void Plot2DDisplay::rebuildReferenceProperties_(
@@ -952,7 +1026,8 @@ void Plot2DDisplay::rebuildReferenceProperties_(
   const std::vector<ReferenceConfig> & values)
 {
   const int repaired_count = std::clamp(count, 0, 12);
-  if (reference_count_property_->getInt() != repaired_count) {
+  {
+    const QSignalBlocker blocker(reference_count_property_);
     reference_count_property_->setInt(repaired_count);
   }
 
@@ -967,62 +1042,86 @@ void Plot2DDisplay::rebuildReferenceProperties_(
       value = values[static_cast<std::size_t>(i)];
     }
 
-    ReferencePropertySet properties;
-    const QString name = "Reference " + QString::number(i + 1);
-    properties.root = new ListItemBoolProperty(
-      name, value.enabled, "Enable this reference line.", references_root_property_,
-      SLOT(onReferencePropertyChanged()), this);
-    properties.duplicate = new rviz_common::properties::BoolProperty(
-      "Duplicate", false, "Duplicate this reference.",
-      properties.root, SLOT(onDuplicateReferenceChanged()), this);
-    properties.duplicate->setShouldBeSaved(false);
-    properties.delete_reference = new rviz_common::properties::BoolProperty(
-      "Delete", false, "Delete this reference.",
-      properties.root, SLOT(onDeleteReferenceChanged()), this);
-    properties.delete_reference->setShouldBeSaved(false);
-    properties.value = new rviz_common::properties::FloatProperty(
-      kReferenceValuePropertyName, value.value, "Y-axis value for this reference line.",
-      properties.root,
-      SLOT(onReferencePropertyChanged()), this);
-    properties.tolerance = new rviz_common::properties::FloatProperty(
-      "Tolerance", value.tolerance,
-      "Optional symmetric tolerance around the reference value.", properties.root,
-      SLOT(onReferencePropertyChanged()), this);
-    properties.tolerance->setMin(0.0F);
-    properties.label = new rviz_common::properties::StringProperty(
-      "Label", QString::fromStdString(value.label), "Reference label.",
-      properties.root, SLOT(onReferencePropertyChanged()), this);
-    properties.color = new rviz_common::properties::ColorProperty(
-      "Color", toQColor(value.color), "Reference line color.",
-      properties.root, SLOT(onReferencePropertyChanged()), this);
-    properties.alpha = new rviz_common::properties::FloatProperty(
-      "Alpha", value.alpha, "Reference line opacity from 0 to 1.",
-      properties.root, SLOT(onReferencePropertyChanged()), this);
-    properties.alpha->setMin(0.0F);
-    properties.alpha->setMax(1.0F);
-    properties.line_width = new rviz_common::properties::FloatProperty(
-      "Line Width", value.line_width, "Reference line width in pixels.",
-      properties.root, SLOT(onReferencePropertyChanged()), this);
-    properties.line_width->setMin(static_cast<float>(kMinimumLineWidth));
-    properties.line_width->setMax(static_cast<float>(kMaximumLineWidth));
-    properties.line_style = new rviz_common::properties::EnumProperty(
-      "Line Style", QString::fromStdString(lineStyleName(value.line_style)),
-      "Reference line pattern.", properties.root, SLOT(onReferencePropertyChanged()), this);
-    addLineStyleOptions(properties.line_style);
+    ReferencePropertySet properties = makeReferencePropertySet_(i, value);
+    references_root_property_->addChild(properties.root);
     reference_properties_.push_back(properties);
   }
   rebuilding_reference_properties_ = false;
   updateReferencePropertySummaries_();
 }
 
-void Plot2DDisplay::replaceReferenceProperties_(const std::vector<ReferenceConfig> & values)
+void Plot2DDisplay::resizeReferenceProperties_(
+  const int count,
+  const std::vector<ReferenceConfig> & values)
 {
-  const int count = static_cast<int>(std::clamp<std::size_t>(values.size(), 0U, 12U));
+  const int repaired_count = std::clamp(count, 0, 12);
   {
     const QSignalBlocker blocker(reference_count_property_);
-    reference_count_property_->setInt(count);
+    reference_count_property_->setInt(repaired_count);
   }
-  rebuildReferenceProperties_(count, values);
+
+  while (reference_properties_.size() > static_cast<std::size_t>(repaired_count)) {
+    removeReferenceProperty_(reference_properties_.size() - 1U);
+  }
+  while (reference_properties_.size() < static_cast<std::size_t>(repaired_count)) {
+    const std::size_t index = reference_properties_.size();
+    ReferenceConfig value;
+    if (index < values.size()) {
+      value = values[index];
+    }
+    insertReferenceProperty_(index, value);
+  }
+  updateReferencePropertySummaries_();
+}
+
+void Plot2DDisplay::insertReferenceProperty_(std::size_t index, const ReferenceConfig & value)
+{
+  index = std::min(index, reference_properties_.size());
+  const bool was_rebuilding = rebuilding_reference_properties_;
+  rebuilding_reference_properties_ = true;
+  ReferencePropertySet properties = makeReferencePropertySet_(static_cast<int>(index), value);
+  references_root_property_->addChild(
+    properties.root, static_cast<int>(index) + kReferenceFixedPropertyCount);
+  reference_properties_.insert(
+    reference_properties_.begin() + static_cast<std::ptrdiff_t>(index), properties);
+  renameReferencePropertyRows_();
+  {
+    const QSignalBlocker blocker(reference_count_property_);
+    reference_count_property_->setInt(static_cast<int>(reference_properties_.size()));
+  }
+  rebuilding_reference_properties_ = was_rebuilding;
+  updateReferencePropertySummaries_();
+}
+
+void Plot2DDisplay::removeReferenceProperty_(const std::size_t index)
+{
+  if (index >= reference_properties_.size()) {
+    return;
+  }
+
+  const bool was_rebuilding = rebuilding_reference_properties_;
+  rebuilding_reference_properties_ = true;
+  delete references_root_property_->takeChildAt(
+    static_cast<int>(index) + kReferenceFixedPropertyCount);
+  reference_properties_.erase(
+    reference_properties_.begin() + static_cast<std::ptrdiff_t>(index));
+  renameReferencePropertyRows_();
+  {
+    const QSignalBlocker blocker(reference_count_property_);
+    reference_count_property_->setInt(static_cast<int>(reference_properties_.size()));
+  }
+  rebuilding_reference_properties_ = was_rebuilding;
+  updateReferencePropertySummaries_();
+}
+
+void Plot2DDisplay::renameReferencePropertyRows_()
+{
+  for (std::size_t i = 0; i < reference_properties_.size(); ++i) {
+    if (reference_properties_[i].root) {
+      reference_properties_[i].root->setName(
+        "Reference " + QString::number(static_cast<int>(i) + 1));
+    }
+  }
 }
 
 void Plot2DDisplay::appendReferencePreset_()
@@ -1037,18 +1136,13 @@ void Plot2DDisplay::appendReferencePreset_()
     return;
   }
 
-  std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
-  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
   for (const ReferenceConfig & reference : additions) {
-    if (references.size() >= 12U) {
+    if (reference_properties_.size() >= 12U) {
       break;
     }
-    references.push_back(reference);
+    insertReferenceProperty_(reference_properties_.size(), reference);
   }
-  expanded.resize(references.size(), false);
 
-  replaceReferenceProperties_(references);
-  applyRowExpansionStates(reference_properties_, expanded);
   onReferencePropertyChanged();
 }
 

@@ -6,6 +6,9 @@
 
 #include "plot_2d_display_test_helpers.hpp"
 
+#include <rviz_common/properties/property_tree_model.hpp>
+#include <rviz_common/properties/property_tree_widget.hpp>
+
 namespace
 {
 
@@ -35,6 +38,21 @@ using rviz_2d_plot_plugin::test::plotDisplaySource;
 using rviz_2d_plot_plugin::test::processQtEvents;
 using rviz_2d_plot_plugin::test::serializeMessage;
 
+struct DisplayTreeFixture
+{
+  DisplayTreeFixture()
+  : display(new Plot2DDisplay()),
+    model(display),
+    tree()
+  {
+    tree.setModel(&model);
+  }
+
+  Plot2DDisplay * display;
+  rviz_common::properties::PropertyTreeModel model;
+  rviz_common::properties::PropertyTreeWidget tree;
+};
+
 }  // namespace
 
 TEST(Plot2DDisplay, ReferenceCommandCheckboxesDuplicateAndDeleteReference)
@@ -63,6 +81,7 @@ TEST(Plot2DDisplay, ReferenceCommandCheckboxesDuplicateAndDeleteReference)
   processQtEvents();
 
   EXPECT_EQ(reference_count->getValue().toInt(), 3);
+  EXPECT_FALSE(duplicate->getValue().toBool());
   reference_1 = findChild(references_root, "Reference 1");
   reference_2 = findChild(references_root, "Reference 2");
   auto * reference_3 = findChild(references_root, "Reference 3");
@@ -121,7 +140,7 @@ TEST(Plot2DDisplay, ReferenceActionsPreserveRowExpansionState)
   ASSERT_NE(nullptr, reference_2);
   ASSERT_NE(nullptr, reference_3);
   EXPECT_TRUE(reference_1->isExpanded());
-  EXPECT_TRUE(reference_2->isExpanded());
+  EXPECT_FALSE(reference_2->isExpanded());
   EXPECT_FALSE(reference_3->isExpanded());
 
   findChild(reference_2, "Delete")->setValue(true);
@@ -133,6 +152,49 @@ TEST(Plot2DDisplay, ReferenceActionsPreserveRowExpansionState)
   ASSERT_NE(nullptr, reference_2);
   EXPECT_TRUE(reference_1->isExpanded());
   EXPECT_FALSE(reference_2->isExpanded());
+}
+
+TEST(Plot2DDisplay, ReferenceActionsPreservePropertyTreeExpansionState)
+{
+  ensureQtApplication();
+  DisplayTreeFixture fixture;
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(*fixture.display);
+  auto * reference_count = findChild(references_root, "Reference Count");
+  ASSERT_NE(nullptr, reference_count);
+
+  reference_count->setValue(2);
+  auto * reference_1 = findChild(references_root, "Reference 1");
+  auto * reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  findChild(reference_1, "Label")->setValue("First");
+  findChild(reference_2, "Label")->setValue("Second");
+  fixture.tree.setExpanded(fixture.model.indexOf(reference_1), true);
+  fixture.tree.setExpanded(fixture.model.indexOf(reference_2), false);
+  ASSERT_TRUE(fixture.tree.isExpanded(fixture.model.indexOf(reference_1)));
+  ASSERT_FALSE(fixture.tree.isExpanded(fixture.model.indexOf(reference_2)));
+
+  findChild(reference_1, "Duplicate")->setValue(true);
+  processQtEvents();
+
+  reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  auto * reference_3 = findChild(references_root, "Reference 3");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  ASSERT_NE(nullptr, reference_3);
+  EXPECT_TRUE(fixture.tree.isExpanded(fixture.model.indexOf(reference_1)));
+  EXPECT_FALSE(fixture.tree.isExpanded(fixture.model.indexOf(reference_3)));
+
+  findChild(reference_2, "Delete")->setValue(true);
+  processQtEvents();
+
+  reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  EXPECT_TRUE(fixture.tree.isExpanded(fixture.model.indexOf(reference_1)));
+  EXPECT_FALSE(fixture.tree.isExpanded(fixture.model.indexOf(reference_2)));
 }
 
 TEST(Plot2DDisplay, ReferenceRowsUseNativeDragDropReordering)
@@ -208,6 +270,7 @@ TEST(Plot2DDisplay, SeriesCommandCheckboxesDuplicateAndDeleteSeries)
   processQtEvents();
 
   EXPECT_EQ(series_count->getValue().toInt(), 3);
+  EXPECT_FALSE(duplicate->getValue().toBool());
   series_2 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 2");
   auto * series_3 = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3");
   ASSERT_NE(nullptr, series_2);
@@ -256,7 +319,7 @@ TEST(Plot2DDisplay, SeriesActionsPreserveRowExpansionState)
   ASSERT_NE(nullptr, series_2);
   ASSERT_NE(nullptr, series_3);
   EXPECT_TRUE(series_1->isExpanded());
-  EXPECT_TRUE(series_2->isExpanded());
+  EXPECT_FALSE(series_2->isExpanded());
   EXPECT_FALSE(series_3->isExpanded());
 
   findChild(series_2, "Delete")->setValue(true);
@@ -268,6 +331,49 @@ TEST(Plot2DDisplay, SeriesActionsPreserveRowExpansionState)
   ASSERT_NE(nullptr, series_2);
   EXPECT_TRUE(series_1->isExpanded());
   EXPECT_FALSE(series_2->isExpanded());
+}
+
+TEST(Plot2DDisplay, SeriesActionsPreservePropertyTreeExpansionState)
+{
+  ensureQtApplication();
+  DisplayTreeFixture fixture;
+  auto * series_root = Plot2DDisplayTestAccessor::seriesRoot(*fixture.display);
+  auto * series_count = findChild(series_root, "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(2);
+  auto * series_1 = findChild(series_root, "Series 1");
+  auto * series_2 = findChild(series_root, "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  findChild(series_1, "Label")->setValue("First");
+  findChild(series_2, "Label")->setValue("Second");
+  fixture.tree.setExpanded(fixture.model.indexOf(series_1), true);
+  fixture.tree.setExpanded(fixture.model.indexOf(series_2), false);
+  ASSERT_TRUE(fixture.tree.isExpanded(fixture.model.indexOf(series_1)));
+  ASSERT_FALSE(fixture.tree.isExpanded(fixture.model.indexOf(series_2)));
+
+  findChild(series_1, "Duplicate")->setValue(true);
+  processQtEvents();
+
+  series_1 = findChild(series_root, "Series 1");
+  series_2 = findChild(series_root, "Series 2");
+  auto * series_3 = findChild(series_root, "Series 3");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+  EXPECT_TRUE(fixture.tree.isExpanded(fixture.model.indexOf(series_1)));
+  EXPECT_FALSE(fixture.tree.isExpanded(fixture.model.indexOf(series_3)));
+
+  findChild(series_2, "Delete")->setValue(true);
+  processQtEvents();
+
+  series_1 = findChild(series_root, "Series 1");
+  series_2 = findChild(series_root, "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  EXPECT_TRUE(fixture.tree.isExpanded(fixture.model.indexOf(series_1)));
+  EXPECT_FALSE(fixture.tree.isExpanded(fixture.model.indexOf(series_2)));
 }
 
 TEST(Plot2DDisplay, SeriesRowsUseNativeDragDropReordering)
