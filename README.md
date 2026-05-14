@@ -1,6 +1,6 @@
 # rviz_2d_plot_plugin
 
-![Version](https://img.shields.io/badge/version-0.1.0-0f172a)
+![Version](https://img.shields.io/badge/version-0.2.0-0f172a)
 ![Humble CI](https://github.com/amgaber95/rviz_2d_plot_plugin/actions/workflows/humble.yml/badge.svg?branch=humble)
 ![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-2563eb)
 ![License](https://img.shields.io/badge/license-MIT-16a34a)
