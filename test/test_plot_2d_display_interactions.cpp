@@ -91,6 +91,50 @@ TEST(Plot2DDisplay, ReferenceCommandCheckboxesDuplicateAndDeleteReference)
   EXPECT_EQ(nullptr, findChild(references_root, "Reference 3"));
 }
 
+TEST(Plot2DDisplay, ReferenceActionsPreserveRowExpansionState)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * references_root = Plot2DDisplayTestAccessor::referencesRoot(display);
+  auto * reference_count = findChild(references_root, "Reference Count");
+  ASSERT_NE(nullptr, reference_count);
+
+  reference_count->setValue(2);
+  auto * reference_1 = findChild(references_root, "Reference 1");
+  auto * reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  findChild(reference_1, "Label")->setValue("First");
+  findChild(reference_2, "Label")->setValue("Second");
+  reference_1->expand();
+  reference_2->collapse();
+  ASSERT_TRUE(reference_1->isExpanded());
+  ASSERT_FALSE(reference_2->isExpanded());
+
+  findChild(reference_1, "Duplicate")->setValue(true);
+  processQtEvents();
+
+  reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  auto * reference_3 = findChild(references_root, "Reference 3");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  ASSERT_NE(nullptr, reference_3);
+  EXPECT_TRUE(reference_1->isExpanded());
+  EXPECT_TRUE(reference_2->isExpanded());
+  EXPECT_FALSE(reference_3->isExpanded());
+
+  findChild(reference_2, "Delete")->setValue(true);
+  processQtEvents();
+
+  reference_1 = findChild(references_root, "Reference 1");
+  reference_2 = findChild(references_root, "Reference 2");
+  ASSERT_NE(nullptr, reference_1);
+  ASSERT_NE(nullptr, reference_2);
+  EXPECT_TRUE(reference_1->isExpanded());
+  EXPECT_FALSE(reference_2->isExpanded());
+}
+
 TEST(Plot2DDisplay, ReferenceRowsUseNativeDragDropReordering)
 {
   ensureQtApplication();
@@ -180,6 +224,50 @@ TEST(Plot2DDisplay, SeriesCommandCheckboxesDuplicateAndDeleteSeries)
 
   EXPECT_EQ(series_count->getValue().toInt(), 2);
   EXPECT_EQ(nullptr, findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 3"));
+}
+
+TEST(Plot2DDisplay, SeriesActionsPreserveRowExpansionState)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * series_root = Plot2DDisplayTestAccessor::seriesRoot(display);
+  auto * series_count = findChild(series_root, "Series Count");
+  ASSERT_NE(nullptr, series_count);
+
+  series_count->setValue(2);
+  auto * series_1 = findChild(series_root, "Series 1");
+  auto * series_2 = findChild(series_root, "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  findChild(series_1, "Label")->setValue("First");
+  findChild(series_2, "Label")->setValue("Second");
+  series_1->expand();
+  series_2->collapse();
+  ASSERT_TRUE(series_1->isExpanded());
+  ASSERT_FALSE(series_2->isExpanded());
+
+  findChild(series_1, "Duplicate")->setValue(true);
+  processQtEvents();
+
+  series_1 = findChild(series_root, "Series 1");
+  series_2 = findChild(series_root, "Series 2");
+  auto * series_3 = findChild(series_root, "Series 3");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  ASSERT_NE(nullptr, series_3);
+  EXPECT_TRUE(series_1->isExpanded());
+  EXPECT_TRUE(series_2->isExpanded());
+  EXPECT_FALSE(series_3->isExpanded());
+
+  findChild(series_2, "Delete")->setValue(true);
+  processQtEvents();
+
+  series_1 = findChild(series_root, "Series 1");
+  series_2 = findChild(series_root, "Series 2");
+  ASSERT_NE(nullptr, series_1);
+  ASSERT_NE(nullptr, series_2);
+  EXPECT_TRUE(series_1->isExpanded());
+  EXPECT_FALSE(series_2->isExpanded());
 }
 
 TEST(Plot2DDisplay, SeriesRowsUseNativeDragDropReordering)

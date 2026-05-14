@@ -20,6 +20,7 @@
 #include <limits>
 #include <sstream>
 #include <utility>
+#include <vector>
 
 #include <pluginlib/class_list_macros.hpp>
 #include <rviz_common/config.hpp>
@@ -75,6 +76,34 @@ std::string statusText(const Plot2DControllerState & state)
     return "OK";
   }
   return "Waiting for a topic and field selection";
+}
+
+template<typename PropertySet>
+std::vector<bool> rowExpansionStates(const std::vector<PropertySet> & properties)
+{
+  std::vector<bool> expanded;
+  expanded.reserve(properties.size());
+  for (const PropertySet & property_set : properties) {
+    expanded.push_back(property_set.root && property_set.root->isExpanded());
+  }
+  return expanded;
+}
+
+template<typename PropertySet>
+void applyRowExpansionStates(
+  const std::vector<PropertySet> & properties,
+  const std::vector<bool> & expanded)
+{
+  for (std::size_t i = 0; i < properties.size() && i < expanded.size(); ++i) {
+    if (!properties[i].root) {
+      continue;
+    }
+    if (expanded[i]) {
+      properties[i].root->expand();
+    } else {
+      properties[i].root->collapse();
+    }
+  }
 }
 
 }  // namespace
@@ -441,7 +470,9 @@ void Plot2DDisplay::onPlotModeChanged()
 void Plot2DDisplay::onSeriesCountChanged()
 {
   const std::vector<SeriesConfig> current = seriesConfigFromProperties_();
+  std::vector<bool> expanded = rowExpansionStates(series_properties_);
   rebuildSeriesProperties_(series_count_property_->getInt(), current);
+  applyRowExpansionStates(series_properties_, expanded);
   onConfigPropertyChanged();
 }
 
@@ -475,12 +506,18 @@ void Plot2DDisplay::onDuplicateSeriesChanged()
   SeriesConfig copy = series[index];
   copy.label = copy.label.empty() ? "Series Copy" : copy.label + " Copy";
   series.insert(series.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
+  std::vector<bool> expanded = rowExpansionStates(series_properties_);
+  if (index < expanded.size()) {
+    expanded.insert(
+      expanded.begin() + static_cast<std::ptrdiff_t>(index + 1), expanded[index]);
+  }
 
   QTimer::singleShot(
     0,
     this,
-    [this, series = std::move(series)]() mutable {
+    [this, series = std::move(series), expanded = std::move(expanded)]() mutable {
       replaceSeriesProperties_(series);
+      applyRowExpansionStates(series_properties_, expanded);
       onConfigPropertyChanged();
     });
 }
@@ -512,12 +549,17 @@ void Plot2DDisplay::onDeleteSeriesChanged()
   }
 
   series.erase(series.begin() + static_cast<std::ptrdiff_t>(index));
+  std::vector<bool> expanded = rowExpansionStates(series_properties_);
+  if (index < expanded.size()) {
+    expanded.erase(expanded.begin() + static_cast<std::ptrdiff_t>(index));
+  }
 
   QTimer::singleShot(
     0,
     this,
-    [this, series = std::move(series)]() mutable {
+    [this, series = std::move(series), expanded = std::move(expanded)]() mutable {
       replaceSeriesProperties_(series);
+      applyRowExpansionStates(series_properties_, expanded);
       onConfigPropertyChanged();
     });
 }
@@ -536,7 +578,9 @@ void Plot2DDisplay::onApplyReferencePresetChanged()
 void Plot2DDisplay::onReferenceCountChanged()
 {
   const std::vector<ReferenceConfig> current = referenceConfigFromProperties_();
+  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
   rebuildReferenceProperties_(reference_count_property_->getInt(), current);
+  applyRowExpansionStates(reference_properties_, expanded);
   onReferencePropertyChanged();
 }
 
@@ -571,12 +615,18 @@ void Plot2DDisplay::onDuplicateReferenceChanged()
     copy.label += " Copy";
   }
   references.insert(references.begin() + static_cast<std::ptrdiff_t>(index + 1), copy);
+  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
+  if (index < expanded.size()) {
+    expanded.insert(
+      expanded.begin() + static_cast<std::ptrdiff_t>(index + 1), expanded[index]);
+  }
 
   QTimer::singleShot(
     0,
     this,
-    [this, references = std::move(references)]() mutable {
+    [this, references = std::move(references), expanded = std::move(expanded)]() mutable {
       replaceReferenceProperties_(references);
+      applyRowExpansionStates(reference_properties_, expanded);
       onReferencePropertyChanged();
     });
 }
@@ -608,12 +658,17 @@ void Plot2DDisplay::onDeleteReferenceChanged()
   }
 
   references.erase(references.begin() + static_cast<std::ptrdiff_t>(index));
+  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
+  if (index < expanded.size()) {
+    expanded.erase(expanded.begin() + static_cast<std::ptrdiff_t>(index));
+  }
 
   QTimer::singleShot(
     0,
     this,
-    [this, references = std::move(references)]() mutable {
+    [this, references = std::move(references), expanded = std::move(expanded)]() mutable {
       replaceReferenceProperties_(references);
+      applyRowExpansionStates(reference_properties_, expanded);
       onReferencePropertyChanged();
     });
 }
@@ -983,14 +1038,17 @@ void Plot2DDisplay::appendReferencePreset_()
   }
 
   std::vector<ReferenceConfig> references = referenceConfigFromProperties_();
+  std::vector<bool> expanded = rowExpansionStates(reference_properties_);
   for (const ReferenceConfig & reference : additions) {
     if (references.size() >= 12U) {
       break;
     }
     references.push_back(reference);
   }
+  expanded.resize(references.size(), false);
 
   replaceReferenceProperties_(references);
+  applyRowExpansionStates(reference_properties_, expanded);
   onReferencePropertyChanged();
 }
 
