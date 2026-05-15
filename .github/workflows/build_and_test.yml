@@ -1,0 +1,56 @@
+name: ROS 2 CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distribution:
+          - humble
+          - jazzy
+          - kilted
+          - lyrical
+          - rolling
+
+        include:
+          - docker_image: ghcr.io/sloretz/ros:humble-ros-base
+            ros_distribution: humble
+          - docker_image: ghcr.io/ros-tooling/setup-ros-docker/setup-ros-docker-ubuntu-noble-ros-jazzy-ros-base:master
+            ros_distribution: jazzy
+          - docker_image: ghcr.io/ros-tooling/setup-ros-docker/setup-ros-docker-ubuntu-noble-ros-kilted-ros-base:master
+            ros_distribution: kilted
+          - docker_image: ghcr.io/ros-tooling/setup-ros-docker/setup-ros-docker-ubuntu-resolute-ros-lyrical-ros-base:master
+            ros_distribution: lyrical
+          - docker_image: ghcr.io/ros-tooling/setup-ros-docker/setup-ros-docker-ubuntu-resolute-ros-rolling-ros-base:master
+            ros_distribution: rolling
+
+    container:
+      image: ${{ matrix.docker_image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build and test package
+        id: action_ros_ci
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: rviz_2d_plot_plugin
+          target-ros2-distro: ${{ matrix.ros_distribution }}
+          coverage-result: false
+
+      - name: Upload colcon logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.ros_distribution }}-colcon-logs
+          path: ${{ steps.action_ros_ci.outputs.ros-workspace-directory-name }}/log
