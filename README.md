@@ -1,8 +1,12 @@
 # rviz_2d_plot_plugin
 
 ![Version](https://img.shields.io/badge/version-0.2.0-0f172a)
-![Humble CI](https://github.com/amgaber95/rviz_2d_plot_plugin/actions/workflows/humble.yml/badge.svg?branch=humble)
+[![ROS 2 CI](https://github.com/amgaber95/rviz_2d_plot_plugin/actions/workflows/build_and_test.yml/badge.svg)](https://github.com/amgaber95/rviz_2d_plot_plugin/actions/workflows/build_and_test.yml)
 ![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-2563eb)
+![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-2563eb)
+![ROS 2 Kilted](https://img.shields.io/badge/ROS%202-Kilted-2563eb)
+![ROS 2 Lyrical](https://img.shields.io/badge/ROS%202-Lyrical-2563eb)
+![ROS 2 Rolling](https://img.shields.io/badge/ROS%202-Rolling-2563eb)
 ![License](https://img.shields.io/badge/license-MIT-16a34a)
 
 A display plugin for RViz 2 that renders live 2D plots as screen-space overlays. It subscribes to ROS 2 topics and discovers plottable fields at runtime, so controller outputs, diagnostics, odometry, and sensor-derived values can stay visible alongside the 3D scene.
