@@ -289,14 +289,26 @@ public:
     try {
       cpp_type_support_library_ = rclcpp::get_typesupport_library(
         message_type_, "rosidl_typesupport_cpp");
+#ifdef SERVICE_TYPESUPPORT_UNAVAILABLE
       cpp_type_support_ = rclcpp::get_typesupport_handle(
         message_type_, "rosidl_typesupport_cpp", *cpp_type_support_library_);
+#else
+      cpp_type_support_ = rclcpp::get_message_typesupport_handle(
+        message_type_, "rosidl_typesupport_cpp", *cpp_type_support_library_);
+#endif
       introspection_type_support_library_ = rclcpp::get_typesupport_library(
         message_type_, "rosidl_typesupport_introspection_cpp");
+#ifdef SERVICE_TYPESUPPORT_UNAVAILABLE
       introspection_type_support_ = rclcpp::get_typesupport_handle(
         message_type_,
         "rosidl_typesupport_introspection_cpp",
         *introspection_type_support_library_);
+#else
+      introspection_type_support_ = rclcpp::get_message_typesupport_handle(
+        message_type_,
+        "rosidl_typesupport_introspection_cpp",
+        *introspection_type_support_library_);
+#endif
       serializer_ = std::make_unique<rclcpp::SerializationBase>(
         cpp_type_support_);
 
@@ -411,10 +423,17 @@ FieldPathOptions numericScalarFieldPathsForType(
   try {
     auto introspection_type_support_library = rclcpp::get_typesupport_library(
       message_type, "rosidl_typesupport_introspection_cpp");
+#ifdef SERVICE_TYPESUPPORT_UNAVAILABLE
     const auto * introspection_type_support = rclcpp::get_typesupport_handle(
       message_type,
       "rosidl_typesupport_introspection_cpp",
       *introspection_type_support_library);
+#else
+    const auto * introspection_type_support = rclcpp::get_message_typesupport_handle(
+      message_type,
+      "rosidl_typesupport_introspection_cpp",
+      *introspection_type_support_library);
+#endif
     const MessageMembers * members =
       membersFromTypeSupport(introspection_type_support);
     if (!members) {

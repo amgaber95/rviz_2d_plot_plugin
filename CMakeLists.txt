@@ -1,7 +1,9 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.20)
 project(rviz_2d_plot_plugin)
 
-set(CMAKE_CXX_STANDARD 17)
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
@@ -18,7 +20,14 @@ find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
 find_package(rviz_rendering REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets)
+
+if(rviz_common_VERSION VERSION_GREATER_EQUAL 15.1)
+  find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+  set(QT_VERSION_MAJOR 6)
+else()
+  find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
+  set(QT_VERSION_MAJOR 5)
+endif()
 
 add_library(${PROJECT_NAME} SHARED
   include/rviz_2d_plot_plugin/plot_2d_config.hpp
@@ -56,19 +65,23 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-  Qt5::Widgets
+  Qt${QT_VERSION_MAJOR}::Widgets
   rviz_ogre_vendor::OgreMain
   rviz_ogre_vendor::OgreOverlay
 )
 
-ament_target_dependencies(${PROJECT_NAME} PUBLIC
-  pluginlib
-  rclcpp
-  rcpputils
-  rosidl_typesupport_cpp
-  rosidl_typesupport_introspection_cpp
-  rviz_common
-  rviz_rendering
+if(rclcpp_VERSION VERSION_LESS 25.0.0)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE SERVICE_TYPESUPPORT_UNAVAILABLE)
+endif()
+
+target_link_libraries(${PROJECT_NAME} PUBLIC
+  pluginlib::pluginlib
+  rclcpp::rclcpp
+  rcpputils::rcpputils
+  rosidl_typesupport_cpp::rosidl_typesupport_cpp
+  rosidl_typesupport_introspection_cpp::rosidl_typesupport_introspection_cpp
+  rviz_common::rviz_common
+  rviz_rendering::rviz_rendering
 )
 
 pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
@@ -118,7 +131,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_plot_2d_controller test/test_plot_2d_controller.cpp)
   target_link_libraries(test_plot_2d_controller ${PROJECT_NAME})
-  ament_target_dependencies(test_plot_2d_controller rclcpp geometry_msgs)
+  target_link_libraries(test_plot_2d_controller ${geometry_msgs_TARGETS} rclcpp::rclcpp)
 
   foreach(display_test
       test_plot_2d_display_properties
@@ -132,7 +145,8 @@ if(BUILD_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test
     )
     target_link_libraries(${display_test} ${PROJECT_NAME})
-    ament_target_dependencies(${display_test} rclcpp geometry_msgs std_msgs)
+    target_link_libraries(${display_test} ${geometry_msgs_TARGETS} ${std_msgs_TARGETS} rclcpp::rclcpp)
+
   endforeach()
 
   ament_add_gtest(test_plot_range test/test_plot_range.cpp)
@@ -155,7 +169,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_topic_field_introspection test/test_topic_field_introspection.cpp)
   target_link_libraries(test_topic_field_introspection ${PROJECT_NAME})
-  ament_target_dependencies(test_topic_field_introspection rclcpp geometry_msgs std_msgs)
+  target_link_libraries(test_topic_field_introspection ${geometry_msgs_TARGETS} ${std_msgs_TARGETS} rclcpp::rclcpp)
 
   ament_add_gtest(test_tick_generator test/test_tick_generator.cpp)
   target_link_libraries(test_tick_generator ${PROJECT_NAME})
