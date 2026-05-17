@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   build-and-test:
-    name: Build and test
+    name: ROS 2 ${{ matrix.ros_distribution }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

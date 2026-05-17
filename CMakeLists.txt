@@ -71,7 +71,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 if(rclcpp_VERSION VERSION_LESS 25.0.0)
-  target_compile_definitions(${PROJECT_NAME} PRIVATE SERVICE_TYPESUPPORT_UNAVAILABLE)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE RCLCPP_USE_LEGACY_TYPESUPPORT_HELPERS)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PUBLIC

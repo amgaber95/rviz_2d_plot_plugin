@@ -289,7 +289,7 @@ public:
     try {
       cpp_type_support_library_ = rclcpp::get_typesupport_library(
         message_type_, "rosidl_typesupport_cpp");
-#ifdef SERVICE_TYPESUPPORT_UNAVAILABLE
+#ifdef RCLCPP_USE_LEGACY_TYPESUPPORT_HELPERS
       cpp_type_support_ = rclcpp::get_typesupport_handle(
         message_type_, "rosidl_typesupport_cpp", *cpp_type_support_library_);
 #else
@@ -298,7 +298,7 @@ public:
 #endif
       introspection_type_support_library_ = rclcpp::get_typesupport_library(
         message_type_, "rosidl_typesupport_introspection_cpp");
-#ifdef SERVICE_TYPESUPPORT_UNAVAILABLE
+#ifdef RCLCPP_USE_LEGACY_TYPESUPPORT_HELPERS
       introspection_type_support_ = rclcpp::get_typesupport_handle(
         message_type_,
         "rosidl_typesupport_introspection_cpp",
@@ -423,7 +423,7 @@ FieldPathOptions numericScalarFieldPathsForType(
   try {
     auto introspection_type_support_library = rclcpp::get_typesupport_library(
       message_type, "rosidl_typesupport_introspection_cpp");
-#ifdef SERVICE_TYPESUPPORT_UNAVAILABLE
+#ifdef RCLCPP_USE_LEGACY_TYPESUPPORT_HELPERS
     const auto * introspection_type_support = rclcpp::get_typesupport_handle(
       message_type,
       "rosidl_typesupport_introspection_cpp",
