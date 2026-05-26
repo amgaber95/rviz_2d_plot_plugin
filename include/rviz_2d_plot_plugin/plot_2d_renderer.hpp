@@ -79,6 +79,7 @@ struct PlotRenderSettings
   LegendPosition legend_position{LegendPosition::TopLeft};
   int legend_x_offset{4};
   int legend_y_offset{4};
+  std::string title;
   bool show_major_grid{true};
   bool show_minor_grid{true};
   int x_major_tick_count{6};

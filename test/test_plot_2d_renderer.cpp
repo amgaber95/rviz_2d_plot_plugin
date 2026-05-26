@@ -843,3 +843,42 @@ TEST(Plot2DRenderer, FontSizeChangesTextRendering)
 
   EXPECT_GT(countDifferentPixels(small_image, large_image), 100);
 }
+
+TEST(Plot2DRenderer, DrawsTitleTextWhenSet)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 10.0;
+  settings.title = "My Plot";
+
+  PlotRenderSettings no_title = settings;
+  no_title.title = "";
+
+  const QImage with_title = renderer.render(settings, {});
+  const QImage without_title = renderer.render(no_title, {});
+
+  // The images must differ — the title adds pixels in the top margin.
+  EXPECT_GT(countDifferentPixels(with_title, without_title), 0);
+}
+
+TEST(Plot2DRenderer, OmitsTitleWhenEmpty)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 10.0;
+  settings.title = "";
+
+  // Render twice with the same empty title — result must be identical.
+  const QImage first = renderer.render(settings, {});
+  const QImage second = renderer.render(settings, {});
+
+  EXPECT_EQ(countDifferentPixels(first, second), 0);
+}
