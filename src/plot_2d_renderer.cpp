@@ -72,7 +72,9 @@ QRectF plotRect(
     yAxisLabelWidth(settings, y_range, font_metrics) + 8.0,
     26.0,
     60.0);
-  const double top_margin = std::max(12.0, static_cast<double>(font_metrics.height()));
+  const double top_margin = settings.title.empty() ?
+    std::max(12.0, static_cast<double>(font_metrics.height())) :
+    std::max(24.0, static_cast<double>(font_metrics.height()) * 2.2);
   const double right_margin = 12.0;
   const double bottom_margin = std::max(22.0, static_cast<double>(font_metrics.height()) + 8.0);
 
@@ -384,6 +386,25 @@ void drawReferences(
   }
 }
 
+void drawTitle(
+  QPainter & painter,
+  const PlotRenderSettings & settings)
+{
+  if (settings.title.empty()) {
+    return;
+  }
+  const QFont bold_font(QStringLiteral("Sans Serif"),
+    std::clamp(settings.font_size + 1, 6, 18), QFont::Bold);
+  painter.save();
+  painter.setFont(bold_font);
+  painter.setPen(settings.text_color);
+  painter.drawText(
+    QRectF(0, 2, settings.width, QFontMetrics(bold_font).height() + 2),
+    Qt::AlignHCenter | Qt::AlignTop,
+    QString::fromStdString(settings.title));
+  painter.restore();
+}
+
 void drawLegend(
   QPainter & painter,
   const QRectF & rect,
@@ -510,6 +531,7 @@ QImage Plot2DRenderer::render(
     drawSeries(painter, rect, x_range, y_range, item);
   }
   drawLegend(painter, rect, series, x_range, settings);
+  drawTitle(painter, settings);
   return image;
 }
 

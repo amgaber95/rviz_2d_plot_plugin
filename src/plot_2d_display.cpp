@@ -284,6 +284,9 @@ Plot2DDisplay::Plot2DDisplay()
 
   style_root_property_ = new rviz_common::properties::Property(
     "Style", QVariant(), "Plot colors.", this);
+  title_property_ = new rviz_common::properties::StringProperty(
+    "Title", "", "Text drawn centered at the top of the plot. Leave empty for no title.",
+    style_root_property_, SLOT(onRenderPropertyChanged()), this);
   background_color_property_ = new rviz_common::properties::ColorProperty(
     "Background Color", QColor(0, 0, 0), "Plot background color.",
     style_root_property_, SLOT(onRenderPropertyChanged()), this);
@@ -340,12 +343,12 @@ void Plot2DDisplay::onInitialize()
 
   if (node_) {
     ros_graph_ops_.get_topic_names_and_types = [this]() {
-        const auto context = node_->get_node_base_interface()->get_context();
-        if (!context || !context->is_valid()) {
-          return TopicTypeMap{};
-        }
-        return node_->get_topic_names_and_types();
-      };
+      const auto context = node_->get_node_base_interface()->get_context();
+      if (!context || !context->is_valid()) {
+        return TopicTypeMap{};
+      }
+      return node_->get_topic_names_and_types();
+    };
     subscription_manager_->setFactory(
       [this](
         const std::string & topic,
@@ -1417,6 +1420,7 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
   settings.text_color = text_color_property_->getColor();
   settings.text_color.setAlpha(235);
   settings.font_size = font_size_property_ ? font_size_property_->getInt() : 8;
+  settings.title = title_property_ ? title_property_->getStdString() : std::string{};
   settings.show_legend = show_legend_property_ ? show_legend_property_->getBool() : true;
   settings.show_latest_values = show_latest_values_property_ ?
     show_latest_values_property_->getBool() : true;

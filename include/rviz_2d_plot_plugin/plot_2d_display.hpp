@@ -243,6 +243,7 @@ private:
   rviz_common::properties::EnumProperty * horizontal_alignment_property_{nullptr};
   rviz_common::properties::EnumProperty * vertical_alignment_property_{nullptr};
   rviz_common::properties::Property * style_root_property_{nullptr};
+  rviz_common::properties::StringProperty * title_property_{nullptr};
   rviz_common::properties::ColorProperty * background_color_property_{nullptr};
   rviz_common::properties::FloatProperty * background_alpha_property_{nullptr};
   rviz_common::properties::ColorProperty * axis_color_property_{nullptr};
