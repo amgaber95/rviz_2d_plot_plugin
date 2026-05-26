@@ -64,12 +64,18 @@ TEST(TopicFieldIntrospection, ListsBoolAsNumericScalar)
   EXPECT_EQ(options.paths, expected);
 }
 
-TEST(TopicFieldIntrospection, SkipsArrayAndSequenceFields)
+TEST(TopicFieldIntrospection, ListsIndexedPathsForNumericArrayFields)
 {
   const auto options = numericScalarFieldPathsForType("std_msgs/msg/Float64MultiArray");
 
   EXPECT_TRUE(options.error.empty());
+  // Bare name must not appear — only indexed variants.
   EXPECT_FALSE(containsPath(options.paths, "data"));
+  // Dynamic sequence: indices 0..7 should be enumerated (kMaxDynamicArrayPreview = 8).
+  EXPECT_TRUE(containsPath(options.paths, "data[0]"));
+  EXPECT_TRUE(containsPath(options.paths, "data[7]"));
+  EXPECT_FALSE(containsPath(options.paths, "data[8]"));
+  // Arrays of nested message types must not be enumerated.
   EXPECT_FALSE(containsPath(options.paths, "layout/dim"));
 }
 
@@ -188,6 +194,41 @@ TEST(TopicFieldIntrospection, RejectsUnsupportedLeafFields)
   EXPECT_EQ(
     array_extractor.extract(serializeMessage(array_message)).status,
     FieldExtractionStatus::UnsupportedField);
+}
+
+TEST(TopicFieldIntrospection, ExtractsArrayElementByIndex)
+{
+  std_msgs::msg::Float64MultiArray message;
+  message.data = {10.0, 20.0, 30.0};
+  GenericFieldExtractor extractor0("std_msgs/msg/Float64MultiArray", {"data[0]"});
+  GenericFieldExtractor extractor2("std_msgs/msg/Float64MultiArray", {"data[2]"});
+
+  ASSERT_TRUE(extractor0.ready()) << extractor0.error();
+  ASSERT_TRUE(extractor2.ready()) << extractor2.error();
+  const auto serialized = serializeMessage(message);
+
+  const auto result0 = extractor0.extract(serialized);
+  ASSERT_EQ(result0.status, FieldExtractionStatus::Ok);
+  ASSERT_TRUE(result0.value.has_value());
+  EXPECT_DOUBLE_EQ(result0.value.value(), 10.0);
+
+  const auto result2 = extractor2.extract(serialized);
+  ASSERT_EQ(result2.status, FieldExtractionStatus::Ok);
+  ASSERT_TRUE(result2.value.has_value());
+  EXPECT_DOUBLE_EQ(result2.value.value(), 30.0);
+}
+
+TEST(TopicFieldIntrospection, RejectsOutOfBoundsArrayIndex)
+{
+  std_msgs::msg::Float64MultiArray message;
+  message.data = {1.0, 2.0, 3.0};
+  GenericFieldExtractor extractor("std_msgs/msg/Float64MultiArray", {"data[10]"});
+
+  ASSERT_TRUE(extractor.ready()) << extractor.error();
+
+  EXPECT_EQ(
+    extractor.extract(serializeMessage(message)).status,
+    FieldExtractionStatus::PathError);
 }
 
 TEST(TopicFieldIntrospection, ReportsMissingExtractionTypeSupport)

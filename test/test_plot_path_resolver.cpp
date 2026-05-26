@@ -59,7 +59,9 @@ TEST(PlotPathResolver, RejectsUnsupportedPaths)
 
   EXPECT_EQ(resolvePlotPath("", topics).status, PlotPathStatus::EmptyPath);
   EXPECT_EQ(resolvePlotPath("scan/ranges", topics).status, PlotPathStatus::InvalidPath);
-  EXPECT_EQ(resolvePlotPath("/scan/ranges[0]", topics).status, PlotPathStatus::UnsupportedSyntax);
+  EXPECT_EQ(resolvePlotPath("/scan/ranges[]", topics).status, PlotPathStatus::UnsupportedSyntax);
+  EXPECT_EQ(resolvePlotPath("/scan/ranges[abc]", topics).status, PlotPathStatus::UnsupportedSyntax);
+  EXPECT_EQ(resolvePlotPath("/scan/ranges[0]", topics).status, PlotPathStatus::Ok);
 }
 
 TEST(PlotPathResolver, ReportsTopicAndFieldErrors)
