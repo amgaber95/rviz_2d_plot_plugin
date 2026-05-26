@@ -11,9 +11,30 @@ namespace rviz_2d_plot_plugin
 namespace
 {
 
-bool containsArraySyntax(const std::string & path)
+bool hasMalformedArraySyntax(const std::string & path)
 {
-  return path.find('[') != std::string::npos || path.find(']') != std::string::npos;
+  // Allow well-formed `name[N]` segments; reject bare unmatched brackets.
+  for (std::size_t i = 0; i < path.size(); ++i) {
+    if (path[i] == '[') {
+      const std::size_t rb = path.find(']', i + 1);
+      if (rb == std::string::npos) {
+        return true;  // unmatched '['
+      }
+      // Ensure everything between brackets is a non-empty digit sequence.
+      if (rb == i + 1) {
+        return true;  // "[]" — no index
+      }
+      for (std::size_t j = i + 1; j < rb; ++j) {
+        if (!std::isdigit(static_cast<unsigned char>(path[j]))) {
+          return true;
+        }
+      }
+      i = rb;
+    } else if (path[i] == ']') {
+      return true;  // unmatched ']'
+    }
+  }
+  return false;
 }
 
 bool isTopicPrefix(const std::string & path, const std::string & topic)
@@ -78,9 +99,9 @@ PlotPathResolution resolvePlotPath(
     result.message = "Path must start with /";
     return result;
   }
-  if (containsArraySyntax(raw_path)) {
+  if (hasMalformedArraySyntax(raw_path)) {
     result.status = PlotPathStatus::UnsupportedSyntax;
-    result.message = "Array indexing is not supported";
+    result.message = "Malformed array index syntax (expected name[N])";
     return result;
   }
 
@@ -126,9 +147,9 @@ PlotPathResolution resolveTopicFieldPath(
     result.message = topic.empty() ? "Topic is empty" : "Topic must start with /";
     return result;
   }
-  if (containsArraySyntax(field_path)) {
+  if (hasMalformedArraySyntax(field_path)) {
     result.status = PlotPathStatus::UnsupportedSyntax;
-    result.message = "Array indexing is not supported";
+    result.message = "Malformed array index syntax (expected name[N])";
     return result;
   }
 

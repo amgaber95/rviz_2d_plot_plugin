@@ -9,6 +9,7 @@
 #include <rosidl_runtime_c/message_type_support_struct.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <exception>
 #include <memory>
@@ -84,6 +85,32 @@ const MessageMember * findMember(
   return nullptr;
 }
 
+/// Parsed representation of one path segment, e.g. "position[2]" → {name="position", index=2}.
+struct FieldSegment
+{
+  std::string name;
+  std::optional<std::size_t> index;
+};
+
+FieldSegment parseSegment(const std::string & seg)
+{
+  const std::size_t lb = seg.find('[');
+  if (lb == std::string::npos) {
+    return {seg, std::nullopt};
+  }
+  const std::size_t rb = seg.find(']', lb + 1);
+  if (rb == std::string::npos || rb == lb + 1) {
+    return {seg, std::nullopt};  // malformed — keep as-is; resolver already validated
+  }
+  const std::string idx_str = seg.substr(lb + 1, rb - lb - 1);
+  for (char c : idx_str) {
+    if (!std::isdigit(static_cast<unsigned char>(c))) {
+      return {seg, std::nullopt};
+    }
+  }
+  return {seg.substr(0, lb), std::stoul(idx_str)};
+}
+
 bool isNumericScalarType(uint8_t type)
 {
   return type == rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOLEAN ||
@@ -150,6 +177,10 @@ std::optional<double> readNumericScalar(const MessageMember & member, const void
   return std::nullopt;
 }
 
+// Maximum number of array elements surfaced in the field dropdown for
+// dynamic sequences (whose runtime size is unknown at introspection time).
+constexpr std::size_t kMaxDynamicArrayPreview = 8;
+
 void collectNumericFieldPaths(
   const MessageMembers * members,
   const std::string & prefix,
@@ -163,12 +194,24 @@ void collectNumericFieldPaths(
 
   for (uint32_t i = 0; i < members->member_count_; ++i) {
     const MessageMember & member = members->members_[i];
-    if (member.is_array_) {
-      continue;
-    }
 
     const std::string path = prefix.empty() ?
       std::string(member.name_) : prefix + "/" + member.name_;
+
+    if (member.is_array_) {
+      if (isNumericScalarType(member.type_id_)) {
+        // Fixed-size array: emit one entry per element.
+        // Dynamic sequence (array_size_ == 0): enumerate up to the preview cap.
+        const std::size_t count =
+          (member.array_size_ > 0) ? member.array_size_ : kMaxDynamicArrayPreview;
+        for (std::size_t k = 0; k < count; ++k) {
+          paths.push_back(path + "[" + std::to_string(k) + "]");
+        }
+      }
+      // Arrays of nested messages are not enumerated (too deep / too many).
+      continue;
+    }
+
     if (isNumericScalarType(member.type_id_)) {
       paths.push_back(path);
       continue;
@@ -208,23 +251,83 @@ FieldExtractionResult walkFieldPath(
 
   for (std::size_t i = 0; i < field_segments.size(); ++i) {
     const bool is_leaf = i + 1 == field_segments.size();
-    const MessageMember * member = findMember(
-      current_members, field_segments[i]);
+    const FieldSegment seg = parseSegment(field_segments[i]);
+
+    const MessageMember * member = findMember(current_members, seg.name);
     if (!member) {
       return FieldExtractionResult{
         FieldExtractionStatus::PathError,
         std::nullopt,
-        "Field does not exist"};
-    }
-    if (member->is_array_) {
-      return FieldExtractionResult{
-        FieldExtractionStatus::UnsupportedField,
-        std::nullopt,
-        "Arrays and sequences are not supported"};
+        "Field does not exist: " + seg.name};
     }
 
     const auto * current_bytes = static_cast<const uint8_t *>(current_message);
     const void * field = current_bytes + member->offset_;
+
+    if (member->is_array_) {
+      // Require an explicit index like "position[2]".
+      if (!seg.index.has_value()) {
+        return FieldExtractionResult{
+          FieldExtractionStatus::UnsupportedField,
+          std::nullopt,
+          "Array field '" + seg.name + "' requires an index, e.g. " + seg.name + "[0]"};
+      }
+      if (!member->get_const_function) {
+        return FieldExtractionResult{
+          FieldExtractionStatus::UnsupportedField,
+          std::nullopt,
+          "Array field '" + seg.name + "' has no element accessor"};
+      }
+      // Bounds-check using the runtime size function when available.
+      if (member->size_function) {
+        const std::size_t sz = member->size_function(field);
+        if (seg.index.value() >= sz) {
+          return FieldExtractionResult{
+            FieldExtractionStatus::PathError,
+            std::nullopt,
+            "Index " + std::to_string(seg.index.value()) +
+            " out of range (size=" + std::to_string(sz) + ") for '" + seg.name + "'"};
+        }
+      }
+      const void * elem = member->get_const_function(field, seg.index.value());
+
+      if (!is_leaf) {
+        if (member->type_id_ !=
+          rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE)
+        {
+          return FieldExtractionResult{
+            FieldExtractionStatus::PathError,
+            std::nullopt,
+            "Path continues through a scalar array element"};
+        }
+        current_members = nestedMembers(*member);
+        if (!current_members) {
+          return FieldExtractionResult{
+            FieldExtractionStatus::TypeSupportError,
+            std::nullopt,
+            "Nested message type support is unavailable"};
+        }
+        current_message = elem;
+        continue;
+      }
+
+      auto value = readNumericScalar(*member, elem);
+      if (!value.has_value()) {
+        return FieldExtractionResult{
+          FieldExtractionStatus::UnsupportedField,
+          std::nullopt,
+          "Array element is not a supported numeric scalar"};
+      }
+      return FieldExtractionResult{FieldExtractionStatus::Ok, value, std::string{}};
+    }
+
+    // Non-array field — index must not be present.
+    if (seg.index.has_value()) {
+      return FieldExtractionResult{
+        FieldExtractionStatus::PathError,
+        std::nullopt,
+        "Field '" + seg.name + "' is not an array but an index was given"};
+    }
 
     if (!is_leaf) {
       if (member->type_id_ !=
