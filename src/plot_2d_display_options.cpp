@@ -212,6 +212,8 @@ std::string plotModeName(const PlotMode mode)
   switch (mode) {
     case PlotMode::TimeSeries:
       return "Time Series";
+    case PlotMode::Delay:
+      return "Delay";
     case PlotMode::XY:
       return "XY";
   }
@@ -223,6 +225,9 @@ PlotMode plotModeFromName(const std::string & name)
   if (name == "XY") {
     return PlotMode::XY;
   }
+  if (name == "Delay") {
+    return PlotMode::Delay;
+  }
   return PlotMode::TimeSeries;
 }
 
@@ -232,6 +237,7 @@ void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
     return;
   }
   property->addOptionStd(plotModeName(PlotMode::TimeSeries));
+  property->addOptionStd(plotModeName(PlotMode::Delay));
   property->addOptionStd(plotModeName(PlotMode::XY));
 }
 
