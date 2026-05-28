@@ -46,6 +46,7 @@ enum class XAxisMode
 enum class PlotMode
 {
   TimeSeries,
+  Delay,
   XY,
 };
 

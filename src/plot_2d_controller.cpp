@@ -454,16 +454,32 @@ bool Plot2DController::appendSerializedMessage(
       x_value = x_result.value.value();
     }
 
-    const double transformed_value =
-      result.value.value() * config_.series[i].value_scale + config_.series[i].value_offset;
-    series.status = PlotControllerStatus::Ok;
-    series.message.clear();
-    series.samples.append(sample_time, x_value, transformed_value);
-    if (!xy_mode || config_.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
-      series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
+    const bool delay_mode = config_.plot_mode == PlotMode::Delay;
+    if (delay_mode)
+    {
+      const double transformed_value = receive_time - x_value;
+      series.status = PlotControllerStatus::Ok;
+      series.message.clear();
+      series.samples.append(sample_time, x_value, transformed_value);
+      if (!xy_mode || config_.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
+        series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
+      }
+      series.latest_value = transformed_value;
+      appended = true;
     }
-    series.latest_value = transformed_value;
-    appended = true;
+    else
+    {
+      const double transformed_value =
+        result.value.value() * config_.series[i].value_scale + config_.series[i].value_offset;
+      series.status = PlotControllerStatus::Ok;
+      series.message.clear();
+      series.samples.append(sample_time, x_value, transformed_value);
+      if (!xy_mode || config_.time.xy_history_mode == XYHistoryMode::RollingTimeWindow) {
+        series.samples.pruneToWindow(sample_time, config_.time.window_seconds);
+      }
+      series.latest_value = transformed_value;
+      appended = true;
+    }
   }
 
   updateAggregateStatus();
