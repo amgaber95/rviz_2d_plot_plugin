@@ -203,6 +203,22 @@ Qt::PenStyle qtPenStyle(const LineStyle style)
   return Qt::SolidLine;
 }
 
+std::string terminalFieldToken(const std::string & field_name)
+{
+  if (field_name.empty()) {
+    return {};
+  }
+
+  const std::size_t end = field_name.find_last_not_of('/');
+  if (end == std::string::npos) {
+    return {};
+  }
+
+  const std::size_t begin = field_name.find_last_of('/', end);
+  const std::size_t start = begin == std::string::npos ? 0 : begin + 1;
+  return field_name.substr(start, end - start + 1);
+}
+
 void drawGrid(
   QPainter & painter,
   const QRectF & rect,
@@ -419,6 +435,12 @@ void drawLegend(
       });
 
     QString text = QString::fromStdString(item.label);
+    if (settings.legend_field_name_only) {
+      const std::string field_token = terminalFieldToken(item.field_name);
+      if (!field_token.empty()) {
+        text = QString::fromStdString(field_token);
+      }
+    }
     if (settings.show_latest_values && latest != item.samples.rend()) {
       text += " ";
       text += QString::fromStdString(formatPlotValue(latest->value));

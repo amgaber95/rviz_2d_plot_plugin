@@ -26,6 +26,7 @@ struct RenderableSeries
   QColor color{80, 170, 255};
   std::vector<PlotSample> samples;
   std::string unit;
+  std::string field_name;
   bool enabled{true};
   double line_width{2.0};
   LineStyle line_style{LineStyle::Solid};
@@ -76,6 +77,7 @@ struct PlotRenderSettings
   int font_size{8};
   bool show_legend{true};
   bool show_latest_values{true};
+  bool legend_field_name_only{false};
   LegendPosition legend_position{LegendPosition::TopLeft};
   int legend_x_offset{4};
   int legend_y_offset{4};
