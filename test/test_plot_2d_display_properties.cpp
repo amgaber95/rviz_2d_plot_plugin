@@ -123,6 +123,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   ASSERT_NE(nullptr, legend);
   EXPECT_NE(nullptr, findChild(legend, "Enabled"));
   EXPECT_NE(nullptr, findChild(legend, "Show Values"));
+  EXPECT_NE(nullptr, findChild(legend, "Field Name Only"));
   EXPECT_NE(nullptr, findChild(legend, "Position"));
   EXPECT_NE(nullptr, findChild(legend, "X Offset"));
   EXPECT_NE(nullptr, findChild(legend, "Y Offset"));
@@ -480,6 +481,7 @@ TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
   ASSERT_NE(nullptr, legend);
   findChild(legend, "Enabled")->setValue(false);
   findChild(legend, "Show Values")->setValue(false);
+  findChild(legend, "Field Name Only")->setValue(true);
   findChild(legend, "Position")->setValue("Bottom Right");
   findChild(legend, "X Offset")->setValue(12);
   findChild(legend, "Y Offset")->setValue(8);
@@ -487,6 +489,7 @@ TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
   const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
   EXPECT_FALSE(settings.show_legend);
   EXPECT_FALSE(settings.show_latest_values);
+  EXPECT_TRUE(settings.legend_field_name_only);
   EXPECT_EQ(settings.legend_position, LegendPosition::BottomRight);
   EXPECT_EQ(settings.legend_x_offset, 12);
   EXPECT_EQ(settings.legend_y_offset, 8);

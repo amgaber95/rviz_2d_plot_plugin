@@ -241,6 +241,10 @@ Plot2DDisplay::Plot2DDisplay()
   show_latest_values_property_ = new rviz_common::properties::BoolProperty(
     "Show Values", true, "Show latest visible sample values next to legend labels.",
     legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  legend_field_name_only_property_ = new rviz_common::properties::BoolProperty(
+    "Field Name Only", false,
+    "Show only the terminal field token in legend labels (for example pose/position/x -> x).",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
   legend_position_property_ = new rviz_common::properties::EnumProperty(
     "Position", QString::fromStdString(legendPositionName(LegendPosition::TopLeft)),
     "Legend placement inside the plot area.",
@@ -1420,6 +1424,8 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
   settings.show_legend = show_legend_property_ ? show_legend_property_->getBool() : true;
   settings.show_latest_values = show_latest_values_property_ ?
     show_latest_values_property_->getBool() : true;
+  settings.legend_field_name_only = legend_field_name_only_property_ ?
+    legend_field_name_only_property_->getBool() : false;
   settings.legend_position = legend_position_property_ ?
     legendPositionFromName(legend_position_property_->getStdString()) : LegendPosition::TopLeft;
   settings.legend_x_offset = legend_x_offset_property_ ? legend_x_offset_property_->getInt() : 4;
@@ -1458,6 +1464,8 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeriesFromSnapshot_(
       if (series.label.empty()) {
         series.label = "Series";
       }
+      series.field_name = snapshot.config.plot_mode == PlotMode::XY ?
+        snapshot.config.series[i].y_field : snapshot.config.series[i].field;
       series.unit = snapshot.config.series[i].unit;
       series.color = toQColor(snapshot.config.series[i].color);
       series.color.setAlphaF(snapshot.config.series[i].line_alpha);

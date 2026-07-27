@@ -232,6 +232,7 @@ private:
   rviz_common::properties::Property * legend_root_property_{nullptr};
   rviz_common::properties::BoolProperty * show_legend_property_{nullptr};
   rviz_common::properties::BoolProperty * show_latest_values_property_{nullptr};
+  rviz_common::properties::BoolProperty * legend_field_name_only_property_{nullptr};
   rviz_common::properties::EnumProperty * legend_position_property_{nullptr};
   rviz_common::properties::IntProperty * legend_x_offset_property_{nullptr};
   rviz_common::properties::IntProperty * legend_y_offset_property_{nullptr};
