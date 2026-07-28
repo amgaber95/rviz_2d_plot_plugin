@@ -184,6 +184,18 @@ Plot2DDisplay::Plot2DDisplay()
     "Y Max", 1.0F, "Fixed y-axis maximum when auto scale is disabled.",
     y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
 
+  right_y_axis_root_property_ = new rviz_common::properties::Property(
+    "Right Y Axis", QVariant(), "Secondary right-side vertical axis scaling.", this);
+  right_y_auto_scale_property_ = new rviz_common::properties::BoolProperty(
+    "Auto Scale", true, "Automatically fit the right y-axis to visible samples.",
+    right_y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_y_min_property_ = new rviz_common::properties::FloatProperty(
+    "Y Min", -1.0F, "Fixed right y-axis minimum when auto scale is disabled.",
+    right_y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_y_max_property_ = new rviz_common::properties::FloatProperty(
+    "Y Max", 1.0F, "Fixed right y-axis maximum when auto scale is disabled.",
+    right_y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
+
   grid_root_property_ = new rviz_common::properties::Property(
     "Grid", QVariant(), "Plot grid density and visibility.", this);
   show_major_grid_property_ = new rviz_common::properties::BoolProperty(
@@ -258,6 +270,35 @@ Plot2DDisplay::Plot2DDisplay()
     "Y Offset", 4, "Vertical legend inset in pixels.",
     legend_root_property_, SLOT(onRenderPropertyChanged()), this);
   legend_y_offset_property_->setMin(0);
+  right_legend_root_property_ = new rviz_common::properties::Property(
+    "Right Legend", QVariant(),
+    "Secondary legend for right-axis series.",
+    legend_root_property_);
+  show_right_legend_property_ = new rviz_common::properties::BoolProperty(
+    "Enabled", true,
+    "Show the right-axis legend.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  merge_right_legend_with_left_property_ = new rviz_common::properties::BoolProperty(
+    "Merge With Left", false,
+    "Render right-axis series entries in the main legend.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  show_right_latest_values_property_ = new rviz_common::properties::BoolProperty(
+    "Show Values", true,
+    "Show latest visible sample values next to right-axis legend labels.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_legend_position_property_ = new rviz_common::properties::EnumProperty(
+    "Position", QString::fromStdString(legendPositionName(LegendPosition::TopRight)),
+    "Right legend placement inside the plot area.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  addLegendPositionOptions(right_legend_position_property_);
+  right_legend_x_offset_property_ = new rviz_common::properties::IntProperty(
+    "X Offset", 4, "Horizontal right legend inset in pixels.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_legend_x_offset_property_->setMin(0);
+  right_legend_y_offset_property_ = new rviz_common::properties::IntProperty(
+    "Y Offset", 4, "Vertical right legend inset in pixels.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_legend_y_offset_property_->setMin(0);
 
   layout_root_property_ = new rviz_common::properties::Property(
     "Layout", QVariant(), "Overlay size and screen position.", this);
@@ -682,6 +723,8 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.x_field = properties.x_field ? properties.x_field->getStdString() : "";
     config.y_field = properties.y_field ? properties.y_field->getStdString() : "";
     config.field = properties.field ? properties.field->getStdString() : "";
+    config.axis = properties.axis ?
+      seriesAxisFromName(properties.axis->getStdString()) : SeriesAxis::Left;
     config.label = properties.label ? properties.label->getStdString() : "Series";
     config.unit = properties.unit ? properties.unit->getStdString() : "";
     config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
@@ -758,6 +801,10 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
     AxisScaleMode::Auto : AxisScaleMode::Fixed;
   config.y_axis.fixed_min = y_min_property_->getFloat();
   config.y_axis.fixed_max = y_max_property_->getFloat();
+  config.y_axis_right.scale_mode = right_y_auto_scale_property_->getBool() ?
+    AxisScaleMode::Auto : AxisScaleMode::Fixed;
+  config.y_axis_right.fixed_min = right_y_min_property_->getFloat();
+  config.y_axis_right.fixed_max = right_y_max_property_->getFloat();
 
   config.layout.width = width_property_->getInt();
   config.layout.height = height_property_->getInt();
@@ -825,6 +872,11 @@ Plot2DDisplay::SeriesPropertySet Plot2DDisplay::makeSeriesPropertySet_(
     &rviz_common::properties::EditableEnumProperty::requestOptions,
     this,
     &Plot2DDisplay::onFieldOptionsRequested);
+  properties.axis = new rviz_common::properties::EnumProperty(
+    "Axis", QString::fromStdString(seriesAxisName(value.axis)),
+    "Select whether this series uses the left or right y-axis.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  addSeriesAxisOptions(properties.axis);
   properties.label = new rviz_common::properties::StringProperty(
     "Label", QString::fromStdString(value.label), "Legend label for this series.",
     properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
@@ -1410,6 +1462,10 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
   settings.fixed_y_min = config.y_axis.fixed_min;
   settings.fixed_y_max = config.y_axis.fixed_max;
   settings.y_padding_fraction = config.y_axis.padding_fraction;
+  settings.right_y_scale_mode = config.y_axis_right.scale_mode;
+  settings.fixed_right_y_min = config.y_axis_right.fixed_min;
+  settings.fixed_right_y_max = config.y_axis_right.fixed_max;
+  settings.right_y_padding_fraction = config.y_axis_right.padding_fraction;
   settings.background_color = background_color_property_->getColor();
   const float background_alpha = background_alpha_property_ ?
     background_alpha_property_->getFloat() : 190.0F / 255.0F;
@@ -1430,6 +1486,19 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
     legendPositionFromName(legend_position_property_->getStdString()) : LegendPosition::TopLeft;
   settings.legend_x_offset = legend_x_offset_property_ ? legend_x_offset_property_->getInt() : 4;
   settings.legend_y_offset = legend_y_offset_property_ ? legend_y_offset_property_->getInt() : 4;
+  settings.show_right_legend = show_right_legend_property_ ?
+    show_right_legend_property_->getBool() : true;
+  settings.merge_right_legend_with_left = merge_right_legend_with_left_property_ ?
+    merge_right_legend_with_left_property_->getBool() : false;
+  settings.show_right_latest_values = show_right_latest_values_property_ ?
+    show_right_latest_values_property_->getBool() : true;
+  settings.right_legend_position = right_legend_position_property_ ?
+    legendPositionFromName(right_legend_position_property_->getStdString()) :
+    LegendPosition::TopRight;
+  settings.right_legend_x_offset = right_legend_x_offset_property_ ?
+    right_legend_x_offset_property_->getInt() : 4;
+  settings.right_legend_y_offset = right_legend_y_offset_property_ ?
+    right_legend_y_offset_property_->getInt() : 4;
   settings.show_major_grid = show_major_grid_property_ ?
     show_major_grid_property_->getBool() : true;
   settings.show_minor_grid = show_minor_grid_property_ ?
@@ -1466,6 +1535,7 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeriesFromSnapshot_(
       }
       series.field_name = snapshot.config.plot_mode == PlotMode::XY ?
         snapshot.config.series[i].y_field : snapshot.config.series[i].field;
+      series.axis = snapshot.config.series[i].axis;
       series.unit = snapshot.config.series[i].unit;
       series.color = toQColor(snapshot.config.series[i].color);
       series.color.setAlphaF(snapshot.config.series[i].line_alpha);

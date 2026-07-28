@@ -248,6 +248,34 @@ std::string seriesDefaultLabel(const SeriesConfig & series, const PlotMode plot_
   return series.topic + separator + series.field;
 }
 
+std::string seriesAxisName(const SeriesAxis axis)
+{
+  switch (axis) {
+    case SeriesAxis::Left:
+      return "Left";
+    case SeriesAxis::Right:
+      return "Right";
+  }
+  return "Left";
+}
+
+SeriesAxis seriesAxisFromName(const std::string & name)
+{
+  if (name == "Right") {
+    return SeriesAxis::Right;
+  }
+  return SeriesAxis::Left;
+}
+
+void addSeriesAxisOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(seriesAxisName(SeriesAxis::Left));
+  property->addOptionStd(seriesAxisName(SeriesAxis::Right));
+}
+
 std::string xyHistoryModeName(const XYHistoryMode mode)
 {
   switch (mode) {

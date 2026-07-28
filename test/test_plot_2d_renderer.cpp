@@ -28,6 +28,7 @@ using rviz_2d_plot_plugin::RenderableReference;
 using rviz_2d_plot_plugin::RenderableSeries;
 using rviz_2d_plot_plugin::LineStyle;
 using rviz_2d_plot_plugin::LegendPosition;
+using rviz_2d_plot_plugin::SeriesAxis;
 using rviz_2d_plot_plugin::XAxisMode;
 
 namespace
@@ -400,6 +401,46 @@ TEST(Plot2DRenderer, IndependentXYAxisScaleKeepsSeparateAxisRanges)
   EXPECT_GT(bounds.width(), bounds.height() + 80);
 }
 
+TEST(Plot2DRenderer, RightAxisSeriesUsesIndependentYScale)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 360;
+  settings.height = 220;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.right_y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_right_y_min = -10.0;
+  settings.fixed_right_y_max = 10.0;
+  settings.show_legend = false;
+
+  RenderableSeries left_series;
+  left_series.label = "Left";
+  left_series.color = QColor(250, 40, 40);
+  left_series.axis = SeriesAxis::Left;
+  left_series.plot_style = PlotStyle::Points;
+  left_series.samples = std::vector<PlotSample>{{10.0, 0.8}};
+
+  RenderableSeries right_series;
+  right_series.label = "Right";
+  right_series.color = QColor(40, 200, 255);
+  right_series.axis = SeriesAxis::Right;
+  right_series.plot_style = PlotStyle::Points;
+  right_series.samples = std::vector<PlotSample>{{10.0, 0.8}};
+
+  const QImage image = renderer.render(settings, {left_series, right_series});
+  const QRect left_bounds = coloredPixelBounds(image, left_series.color);
+  const QRect right_bounds = coloredPixelBounds(image, right_series.color);
+
+  ASSERT_FALSE(left_bounds.isNull());
+  ASSERT_FALSE(right_bounds.isNull());
+  EXPECT_GT(right_bounds.center().y() - left_bounds.center().y(), 20);
+}
+
 TEST(Plot2DRenderer, AppliesConfiguredLineWidth)
 {
   ensureQtApplication();
@@ -712,6 +753,91 @@ TEST(Plot2DRenderer, OmitsLatestValuesFromLegendWhenConfigured)
   const QImage without_values = renderer.render(settings, {series});
 
   EXPECT_GT(countDifferentPixels(with_values, without_values), 0);
+}
+
+TEST(Plot2DRenderer, RightLegendLatestValuesAreIndependent)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.right_y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_right_y_min = -1.0;
+  settings.fixed_right_y_max = 1.0;
+  settings.show_latest_values = false;
+  settings.show_right_legend = true;
+  settings.show_right_latest_values = true;
+
+  RenderableSeries left;
+  left.label = "Left";
+  left.color = QColor(250, 40, 40);
+  left.axis = SeriesAxis::Left;
+  left.samples = std::vector<PlotSample>{{10.0, 0.25}};
+
+  RenderableSeries right;
+  right.label = "Right";
+  right.color = QColor(40, 120, 255);
+  right.axis = SeriesAxis::Right;
+  right.samples = std::vector<PlotSample>{{10.0, -0.5}};
+
+  const QImage with_right_values = renderer.render(settings, {left, right});
+  settings.show_right_latest_values = false;
+  const QImage without_right_values = renderer.render(settings, {left, right});
+
+  EXPECT_GT(countDifferentPixels(with_right_values, without_right_values), 0);
+}
+
+TEST(Plot2DRenderer, RightLegendCanMergeWithLeftLegend)
+{
+  ensureQtApplication();
+  Plot2DRenderer renderer;
+  PlotRenderSettings settings;
+  settings.width = 320;
+  settings.height = 160;
+  settings.now = 10.0;
+  settings.window_seconds = 5.0;
+  settings.y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_y_min = -1.0;
+  settings.fixed_y_max = 1.0;
+  settings.right_y_scale_mode = rviz_2d_plot_plugin::AxisScaleMode::Fixed;
+  settings.fixed_right_y_min = -1.0;
+  settings.fixed_right_y_max = 1.0;
+  settings.legend_position = LegendPosition::TopLeft;
+  settings.right_legend_position = LegendPosition::BottomRight;
+  settings.show_latest_values = false;
+  settings.show_right_legend = true;
+  settings.show_right_latest_values = false;
+
+  RenderableSeries left;
+  left.label = "Left";
+  left.color = QColor(250, 40, 40);
+  left.axis = SeriesAxis::Left;
+
+  RenderableSeries right;
+  right.label = "Right";
+  right.color = QColor(40, 120, 255);
+  right.axis = SeriesAxis::Right;
+
+  settings.merge_right_legend_with_left = false;
+  const QImage separate = renderer.render(settings, {left, right});
+  settings.merge_right_legend_with_left = true;
+  const QImage merged = renderer.render(settings, {left, right});
+
+  EXPECT_GT(
+    countPixelsCloseToInRect(separate, right.color, QRect(210, 116, 95, 34)),
+    0);
+  EXPECT_EQ(
+    countPixelsCloseToInRect(merged, right.color, QRect(210, 116, 95, 34)),
+    0);
+  EXPECT_GT(
+    countPixelsCloseToInRect(merged, right.color, QRect(38, 14, 130, 50)),
+    0);
 }
 
 TEST(Plot2DRenderer, AppendsLegendUnitOnlyWhenLatestValueIsShown)

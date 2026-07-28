@@ -61,6 +61,12 @@ enum class XYAxisScaleMode
   Equal,
 };
 
+enum class SeriesAxis
+{
+  Left,
+  Right,
+};
+
 enum class TimeSource
 {
   ReceiveTime,
@@ -170,6 +176,7 @@ struct SeriesColor
 struct SeriesConfig
 {
   bool enabled{true};
+  SeriesAxis axis{SeriesAxis::Left};
   std::string topic;
   std::string x_field;
   std::string y_field;
@@ -210,6 +217,7 @@ struct Plot2DConfig
   PlotMode plot_mode{PlotMode::TimeSeries};
   XAxisConfig x_axis;
   AxisConfig y_axis;
+  AxisConfig y_axis_right;
   TimeConfig time;
   QoSConfig qos;
   LayoutConfig layout;

@@ -19,6 +19,7 @@ using rviz_2d_plot_plugin::Plot2DDisplay;
 using rviz_2d_plot_plugin::Plot2DDisplayTestAccessor;
 using rviz_2d_plot_plugin::QoSDurability;
 using rviz_2d_plot_plugin::QoSReliability;
+using rviz_2d_plot_plugin::SeriesAxis;
 using rviz_2d_plot_plugin::TimeSource;
 using rviz_2d_plot_plugin::TopicTypeMap;
 using rviz_2d_plot_plugin::VerticalAlignment;
@@ -47,6 +48,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::seriesRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::timeRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::yAxisRoot(display));
+  ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::rightYAxisRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::referencesRoot(display));
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::layoutRoot(display));
   EXPECT_EQ(findChild(&display, "Pause Plot"), Plot2DDisplayTestAccessor::pausePlot(display));
@@ -65,6 +67,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(series, "X Field"));
   EXPECT_NE(nullptr, findChild(series, "Y Field"));
   EXPECT_NE(nullptr, findChild(series, "Field"));
+  EXPECT_NE(nullptr, findChild(series, "Axis"));
   EXPECT_FALSE(findChild(series, "Field")->getHidden());
   EXPECT_TRUE(findChild(series, "X Field")->getHidden());
   EXPECT_TRUE(findChild(series, "Y Field")->getHidden());
@@ -104,6 +107,11 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(y_axis, "Y Min"));
   EXPECT_NE(nullptr, findChild(y_axis, "Y Max"));
 
+  auto * right_y_axis = Plot2DDisplayTestAccessor::rightYAxisRoot(display);
+  EXPECT_NE(nullptr, findChild(right_y_axis, "Auto Scale"));
+  EXPECT_NE(nullptr, findChild(right_y_axis, "Y Min"));
+  EXPECT_NE(nullptr, findChild(right_y_axis, "Y Max"));
+
   auto * grid = Plot2DDisplayTestAccessor::gridRoot(display);
   ASSERT_NE(nullptr, grid);
   EXPECT_NE(nullptr, findChild(grid, "Major Grid"));
@@ -127,6 +135,14 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   EXPECT_NE(nullptr, findChild(legend, "Position"));
   EXPECT_NE(nullptr, findChild(legend, "X Offset"));
   EXPECT_NE(nullptr, findChild(legend, "Y Offset"));
+  auto * right_legend = findChild(legend, "Right Legend");
+  ASSERT_NE(nullptr, right_legend);
+  EXPECT_NE(nullptr, findChild(right_legend, "Enabled"));
+  EXPECT_NE(nullptr, findChild(right_legend, "Merge With Left"));
+  EXPECT_NE(nullptr, findChild(right_legend, "Show Values"));
+  EXPECT_NE(nullptr, findChild(right_legend, "Position"));
+  EXPECT_NE(nullptr, findChild(right_legend, "X Offset"));
+  EXPECT_NE(nullptr, findChild(right_legend, "Y Offset"));
 
   auto * layout = Plot2DDisplayTestAccessor::layoutRoot(display);
   EXPECT_NE(nullptr, findChild(layout, "Width"));
@@ -261,6 +277,7 @@ TEST(Plot2DDisplay, BooleanPropertiesUseCheckboxEditing)
     findChild(series, "Delete"),
     findChild(Plot2DDisplayTestAccessor::xAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale"),
+    findChild(Plot2DDisplayTestAccessor::rightYAxisRoot(display), "Auto Scale"),
     findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Major Grid"),
     findChild(Plot2DDisplayTestAccessor::gridRoot(display), "Minor Grid"),
   };
@@ -287,6 +304,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(series, "X Field")->setValue("pose/pose/position/x");
   findChild(series, "Y Field")->setValue("pose/pose/position/y");
   findChild(series, "Field")->setValue("pose/pose/position/y");
+  findChild(series, "Axis")->setValue("Right");
   findChild(series, "Label")->setValue("Odom Position");
   findChild(series, "Unit")->setValue("m");
   findChild(series, "Color")->setValue(QColor(255, 80, 20));
@@ -315,6 +333,9 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Auto Scale")->setValue(false);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Min")->setValue(-2.0);
   findChild(Plot2DDisplayTestAccessor::yAxisRoot(display), "Y Max")->setValue(2.0);
+  findChild(Plot2DDisplayTestAccessor::rightYAxisRoot(display), "Auto Scale")->setValue(false);
+  findChild(Plot2DDisplayTestAccessor::rightYAxisRoot(display), "Y Min")->setValue(-5.0);
+  findChild(Plot2DDisplayTestAccessor::rightYAxisRoot(display), "Y Max")->setValue(5.0);
   findChild(Plot2DDisplayTestAccessor::referencesRoot(display), "Reference Count")->setValue(1);
   auto * reference =
     findChild(Plot2DDisplayTestAccessor::referencesRoot(display), "Reference 1");
@@ -344,6 +365,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.series[0].x_field, "pose/pose/position/x");
   EXPECT_EQ(config.series[0].y_field, "pose/pose/position/y");
   EXPECT_EQ(config.series[0].field, "pose/pose/position/y");
+  EXPECT_EQ(config.series[0].axis, SeriesAxis::Right);
   EXPECT_EQ(config.series[0].label, "Odom Position");
   EXPECT_EQ(config.series[0].unit, "m");
   EXPECT_EQ(config.series[0].color.red, 255);
@@ -371,6 +393,9 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.y_axis.scale_mode, AxisScaleMode::Fixed);
   EXPECT_EQ(config.y_axis.fixed_min, -2.0);
   EXPECT_EQ(config.y_axis.fixed_max, 2.0);
+  EXPECT_EQ(config.y_axis_right.scale_mode, AxisScaleMode::Fixed);
+  EXPECT_EQ(config.y_axis_right.fixed_min, -5.0);
+  EXPECT_EQ(config.y_axis_right.fixed_max, 5.0);
   ASSERT_EQ(config.references.size(), 1U);
   EXPECT_TRUE(config.references[0].enabled);
   EXPECT_DOUBLE_EQ(config.references[0].value, 0.5);
@@ -479,12 +504,20 @@ TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
   Plot2DDisplay display;
   auto * legend = Plot2DDisplayTestAccessor::legendRoot(display);
   ASSERT_NE(nullptr, legend);
+  auto * right_legend = findChild(legend, "Right Legend");
+  ASSERT_NE(nullptr, right_legend);
   findChild(legend, "Enabled")->setValue(false);
   findChild(legend, "Show Values")->setValue(false);
   findChild(legend, "Field Name Only")->setValue(true);
   findChild(legend, "Position")->setValue("Bottom Right");
   findChild(legend, "X Offset")->setValue(12);
   findChild(legend, "Y Offset")->setValue(8);
+  findChild(right_legend, "Enabled")->setValue(false);
+  findChild(right_legend, "Merge With Left")->setValue(true);
+  findChild(right_legend, "Show Values")->setValue(false);
+  findChild(right_legend, "Position")->setValue("Bottom Left");
+  findChild(right_legend, "X Offset")->setValue(13);
+  findChild(right_legend, "Y Offset")->setValue(9);
 
   const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
   EXPECT_FALSE(settings.show_legend);
@@ -493,6 +526,12 @@ TEST(Plot2DDisplay, MapsLegendPropertiesToRenderSettings)
   EXPECT_EQ(settings.legend_position, LegendPosition::BottomRight);
   EXPECT_EQ(settings.legend_x_offset, 12);
   EXPECT_EQ(settings.legend_y_offset, 8);
+  EXPECT_FALSE(settings.show_right_legend);
+  EXPECT_TRUE(settings.merge_right_legend_with_left);
+  EXPECT_FALSE(settings.show_right_latest_values);
+  EXPECT_EQ(settings.right_legend_position, LegendPosition::BottomLeft);
+  EXPECT_EQ(settings.right_legend_x_offset, 13);
+  EXPECT_EQ(settings.right_legend_y_offset, 9);
 }
 
 TEST(Plot2DDisplay, MapsGridPropertiesToRenderSettings)
@@ -513,6 +552,22 @@ TEST(Plot2DDisplay, MapsGridPropertiesToRenderSettings)
   EXPECT_EQ(settings.x_major_tick_count, 4);
   EXPECT_EQ(settings.y_major_tick_count, 7);
   EXPECT_EQ(settings.minor_grid_divisions, 2);
+}
+
+TEST(Plot2DDisplay, MapsRightYAxisPropertiesToRenderSettings)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * right_y_axis = Plot2DDisplayTestAccessor::rightYAxisRoot(display);
+  ASSERT_NE(nullptr, right_y_axis);
+  findChild(right_y_axis, "Auto Scale")->setValue(false);
+  findChild(right_y_axis, "Y Min")->setValue(-9.0);
+  findChild(right_y_axis, "Y Max")->setValue(9.0);
+
+  const auto settings = Plot2DDisplayTestAccessor::renderSettingsFromProperties(display);
+  EXPECT_EQ(settings.right_y_scale_mode, AxisScaleMode::Fixed);
+  EXPECT_DOUBLE_EQ(settings.fixed_right_y_min, -9.0);
+  EXPECT_DOUBLE_EQ(settings.fixed_right_y_max, 9.0);
 }
 
 TEST(Plot2DDisplay, MapsBackgroundAlphaToRenderSettings)

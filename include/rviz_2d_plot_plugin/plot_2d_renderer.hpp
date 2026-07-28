@@ -27,6 +27,7 @@ struct RenderableSeries
   std::vector<PlotSample> samples;
   std::string unit;
   std::string field_name;
+  SeriesAxis axis{SeriesAxis::Left};
   bool enabled{true};
   double line_width{2.0};
   LineStyle line_style{LineStyle::Solid};
@@ -70,6 +71,10 @@ struct PlotRenderSettings
   double fixed_y_min{-1.0};
   double fixed_y_max{1.0};
   double y_padding_fraction{0.08};
+  AxisScaleMode right_y_scale_mode{AxisScaleMode::Auto};
+  double fixed_right_y_min{-1.0};
+  double fixed_right_y_max{1.0};
+  double right_y_padding_fraction{0.08};
   QColor background_color{0, 0, 0, 190};
   QColor axis_color{230, 230, 230, 230};
   QColor grid_color{130, 130, 130, 80};
@@ -81,6 +86,12 @@ struct PlotRenderSettings
   LegendPosition legend_position{LegendPosition::TopLeft};
   int legend_x_offset{4};
   int legend_y_offset{4};
+  bool show_right_legend{true};
+  bool merge_right_legend_with_left{false};
+  bool show_right_latest_values{true};
+  LegendPosition right_legend_position{LegendPosition::TopRight};
+  int right_legend_x_offset{4};
+  int right_legend_y_offset{4};
   bool show_major_grid{true};
   bool show_minor_grid{true};
   int x_major_tick_count{6};

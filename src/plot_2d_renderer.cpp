@@ -45,12 +45,12 @@ double majorTickStep(const std::vector<double> & ticks)
 }
 
 double yAxisLabelWidth(
-  const PlotRenderSettings & settings,
   const PlotRange & y_range,
+  const int major_tick_count,
   const QFontMetrics & font_metrics)
 {
   const std::size_t y_major_count = static_cast<std::size_t>(
-    std::clamp(settings.y_major_tick_count, 2, 20));
+    std::clamp(major_tick_count, 2, 20));
   const TickSet ticks = generateTicks(y_range, y_major_count, 0);
   const double step = majorTickStep(ticks.major);
 
@@ -63,17 +63,42 @@ double yAxisLabelWidth(
   return static_cast<double>(width);
 }
 
-QRectF plotRect(
+double leftYAxisLabelWidth(
   const PlotRenderSettings & settings,
   const PlotRange & y_range,
   const QFontMetrics & font_metrics)
 {
+  return yAxisLabelWidth(y_range, settings.y_major_tick_count, font_metrics);
+}
+
+double rightYAxisLabelWidth(
+  const PlotRenderSettings & settings,
+  const PlotRange & right_y_range,
+  const bool has_right_axis,
+  const QFontMetrics & font_metrics)
+{
+  if (!has_right_axis) {
+    return 0.0;
+  }
+  return yAxisLabelWidth(right_y_range, settings.y_major_tick_count, font_metrics);
+}
+
+QRectF plotRect(
+  const PlotRenderSettings & settings,
+  const PlotRange & left_y_range,
+  const PlotRange & right_y_range,
+  const bool has_right_axis,
+  const QFontMetrics & font_metrics)
+{
   const double left_margin = std::clamp(
-    yAxisLabelWidth(settings, y_range, font_metrics) + 8.0,
+    leftYAxisLabelWidth(settings, left_y_range, font_metrics) + 8.0,
     26.0,
     60.0);
   const double top_margin = std::max(12.0, static_cast<double>(font_metrics.height()));
-  const double right_margin = 12.0;
+  const double right_margin = std::clamp(
+    rightYAxisLabelWidth(settings, right_y_range, has_right_axis, font_metrics) + 8.0,
+    12.0,
+    60.0);
   const double bottom_margin = std::max(22.0, static_cast<double>(font_metrics.height()) + 8.0);
 
   return QRectF(
@@ -124,14 +149,50 @@ std::vector<PlotSample> visibleSamples(
   return samples;
 }
 
-PlotRange yRangeForSettings(
-  const PlotRenderSettings & settings,
+std::vector<PlotSample> visibleSamplesForAxis(
+  const std::vector<RenderableSeries> & series,
+  const PlotRange & time_range,
+  const XAxisMode x_axis_mode,
+  const SeriesAxis axis)
+{
+  std::vector<PlotSample> samples;
+  for (const RenderableSeries & item : series) {
+    if (!item.enabled || item.axis != axis) {
+      continue;
+    }
+    for (const PlotSample & sample : item.samples) {
+      if (x_axis_mode == XAxisMode::Field ||
+        (sample.time >= time_range.min && sample.time <= time_range.max))
+      {
+        samples.push_back(sample);
+      }
+    }
+  }
+  return samples;
+}
+
+bool hasEnabledSeriesOnAxis(
+  const std::vector<RenderableSeries> & series,
+  const SeriesAxis axis)
+{
+  return std::any_of(
+    series.begin(), series.end(),
+    [axis](const RenderableSeries & item) {
+      return item.enabled && item.axis == axis;
+    });
+}
+
+PlotRange yRangeForAxis(
+  const AxisScaleMode scale_mode,
+  const double fixed_min,
+  const double fixed_max,
+  const double padding_fraction,
   const std::vector<PlotSample> & samples)
 {
-  if (settings.y_scale_mode == AxisScaleMode::Fixed) {
-    return makeFixedRange(settings.fixed_y_min, settings.fixed_y_max);
+  if (scale_mode == AxisScaleMode::Fixed) {
+    return makeFixedRange(fixed_min, fixed_max);
   }
-  return makeAutoRange(samples, settings.y_padding_fraction);
+  return makeAutoRange(samples, padding_fraction);
 }
 
 PlotRange xRangeForSettings(
@@ -223,7 +284,9 @@ void drawGrid(
   QPainter & painter,
   const QRectF & rect,
   const PlotRange & x_range,
-  const PlotRange & y_range,
+  const PlotRange & left_y_range,
+  const PlotRange & right_y_range,
+  const bool has_right_axis,
   const PlotRenderSettings & settings)
 {
   const std::size_t x_major_count = static_cast<std::size_t>(
@@ -235,14 +298,16 @@ void drawGrid(
   const TickSet x_ticks = settings.x_axis_mode == XAxisMode::Time ?
     generateTicks(PlotRange{0.0, settings.window_seconds}, x_major_count, minor_divisions) :
     generateTicks(x_range, x_major_count, minor_divisions);
-  const TickSet y_ticks = generateTicks(y_range, y_major_count, minor_divisions);
+  const TickSet left_y_ticks = generateTicks(left_y_range, y_major_count, minor_divisions);
+  const TickSet right_y_ticks = generateTicks(right_y_range, y_major_count, minor_divisions);
   const double x_step = majorTickStep(x_ticks.major);
-  const double y_step = majorTickStep(y_ticks.major);
+  const double left_y_step = majorTickStep(left_y_ticks.major);
+  const double right_y_step = majorTickStep(right_y_ticks.major);
 
   if (settings.show_minor_grid) {
     painter.setPen(QPen(scaledAlpha(settings.grid_color, 0.45), 1.0));
-    for (const double tick : y_ticks.minor) {
-      const double y = mapY(rect, y_range, tick);
+    for (const double tick : left_y_ticks.minor) {
+      const double y = mapY(rect, left_y_range, tick);
       painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
     for (const double tick : x_ticks.minor) {
@@ -255,8 +320,8 @@ void drawGrid(
 
   if (settings.show_major_grid) {
     painter.setPen(QPen(settings.grid_color, 1.0));
-    for (const double tick : y_ticks.major) {
-      const double y = mapY(rect, y_range, tick);
+    for (const double tick : left_y_ticks.major) {
+      const double y = mapY(rect, left_y_range, tick);
       painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
     }
     for (const double tick : x_ticks.major) {
@@ -271,12 +336,22 @@ void drawGrid(
   painter.drawRect(rect);
 
   painter.setPen(QPen(settings.text_color, 1.0));
-  for (const double tick : y_ticks.major) {
-    const double y = mapY(rect, y_range, tick);
+  for (const double tick : left_y_ticks.major) {
+    const double y = mapY(rect, left_y_range, tick);
     painter.drawText(
       QRectF(2.0, y - 8.0, rect.left() - 6.0, 16.0),
       Qt::AlignRight | Qt::AlignVCenter,
-      QString::fromStdString(formatAxisTickValue(tick, y_step)));
+      QString::fromStdString(formatAxisTickValue(tick, left_y_step)));
+  }
+
+  if (has_right_axis) {
+    for (const double tick : right_y_ticks.major) {
+      const double y = mapY(rect, right_y_range, tick);
+      painter.drawText(
+        QRectF(rect.right() + 6.0, y - 8.0, settings.width - rect.right() - 8.0, 16.0),
+        Qt::AlignLeft | Qt::AlignVCenter,
+        QString::fromStdString(formatAxisTickValue(tick, right_y_step)));
+    }
   }
 
   for (const double tick : x_ticks.major) {
@@ -400,28 +475,24 @@ void drawReferences(
   }
 }
 
-void drawLegend(
-  QPainter & painter,
-  const QRectF & rect,
+struct LegendEntry
+{
+  QColor color;
+  QString text;
+};
+
+void appendLegendEntries(
   const std::vector<RenderableSeries> & series,
   const PlotRange & x_range,
-  const PlotRenderSettings & settings)
+  const PlotRenderSettings & settings,
+  const bool filter_axis,
+  const SeriesAxis axis,
+  const bool show_values,
+  std::vector<LegendEntry> & entries,
+  const QString & axis_prefix = "")
 {
-  if (!settings.show_legend) {
-    return;
-  }
-
-  struct LegendEntry
-  {
-    QColor color;
-    QString text;
-  };
-
-  std::vector<LegendEntry> entries;
-  entries.reserve(series.size());
-  double text_width = 0.0;
   for (const RenderableSeries & item : series) {
-    if (!item.enabled) {
+    if (!item.enabled || (filter_axis && item.axis != axis)) {
       continue;
     }
 
@@ -441,7 +512,10 @@ void drawLegend(
         text = QString::fromStdString(field_token);
       }
     }
-    if (settings.show_latest_values && latest != item.samples.rend()) {
+    if (!axis_prefix.isEmpty()) {
+      text = axis_prefix + " " + text;
+    }
+    if (show_values && latest != item.samples.rend()) {
       text += " ";
       text += QString::fromStdString(formatPlotValue(latest->value));
       if (!item.unit.empty()) {
@@ -449,14 +523,28 @@ void drawLegend(
         text += QString::fromStdString(item.unit);
       }
     }
-    text_width = std::max(
-      text_width,
-      static_cast<double>(painter.fontMetrics().horizontalAdvance(text)));
     entries.push_back(LegendEntry{item.color, text});
   }
+}
 
+void drawLegendEntries(
+  QPainter & painter,
+  const QRectF & rect,
+  const PlotRenderSettings & settings,
+  const std::vector<LegendEntry> & entries,
+  const LegendPosition position,
+  const int x_offset_px,
+  const int y_offset_px)
+{
   if (entries.empty()) {
     return;
+  }
+
+  double text_width = 0.0;
+  for (const LegendEntry & entry : entries) {
+    text_width = std::max(
+      text_width,
+      static_cast<double>(painter.fontMetrics().horizontalAdvance(entry.text)));
   }
 
   const double line_height = std::max(
@@ -465,13 +553,13 @@ void drawLegend(
   const double legend_width = std::min(rect.width() - 8.0, std::max(72.0, text_width + 24.0));
   const double legend_height = line_height * static_cast<double>(entries.size());
   const bool align_right =
-    settings.legend_position == LegendPosition::TopRight ||
-    settings.legend_position == LegendPosition::BottomRight;
+    position == LegendPosition::TopRight ||
+    position == LegendPosition::BottomRight;
   const bool align_bottom =
-    settings.legend_position == LegendPosition::BottomLeft ||
-    settings.legend_position == LegendPosition::BottomRight;
-  const double x_offset = static_cast<double>(std::max(0, settings.legend_x_offset));
-  const double y_offset = static_cast<double>(std::max(0, settings.legend_y_offset));
+    position == LegendPosition::BottomLeft ||
+    position == LegendPosition::BottomRight;
+  const double x_offset = static_cast<double>(std::max(0, x_offset_px));
+  const double y_offset = static_cast<double>(std::max(0, y_offset_px));
   const double x = align_right ? rect.right() - legend_width - x_offset : rect.left() + x_offset;
   double y = align_bottom ? rect.bottom() - legend_height - y_offset : rect.top() + y_offset;
 
@@ -487,6 +575,91 @@ void drawLegend(
       entry.text);
     y += line_height;
   }
+}
+
+void drawLegend(
+  QPainter & painter,
+  const QRectF & rect,
+  const std::vector<RenderableSeries> & series,
+  const PlotRange & x_range,
+  const PlotRenderSettings & settings)
+{
+  if (!settings.show_legend) {
+    return;
+  }
+
+  std::vector<LegendEntry> left_entries;
+  std::vector<LegendEntry> right_entries;
+  left_entries.reserve(series.size());
+  right_entries.reserve(series.size());
+
+  appendLegendEntries(
+    series,
+    x_range,
+    settings,
+    true,
+    SeriesAxis::Left,
+    settings.show_latest_values,
+    left_entries);
+  if (settings.show_right_legend) {
+    appendLegendEntries(
+      series,
+      x_range,
+      settings,
+      true,
+      SeriesAxis::Right,
+      settings.show_right_latest_values,
+      right_entries);
+  }
+
+  if (settings.merge_right_legend_with_left && settings.show_right_legend) {
+    std::vector<LegendEntry> merged_entries;
+    merged_entries.reserve(left_entries.size() + right_entries.size());
+    appendLegendEntries(
+      series,
+      x_range,
+      settings,
+      true,
+      SeriesAxis::Left,
+      settings.show_latest_values,
+      merged_entries,
+      "[L]");
+    appendLegendEntries(
+      series,
+      x_range,
+      settings,
+      true,
+      SeriesAxis::Right,
+      settings.show_right_latest_values,
+      merged_entries,
+      "[R]");
+    drawLegendEntries(
+      painter,
+      rect,
+      settings,
+      merged_entries,
+      settings.legend_position,
+      settings.legend_x_offset,
+      settings.legend_y_offset);
+    return;
+  }
+
+  drawLegendEntries(
+    painter,
+    rect,
+    settings,
+    left_entries,
+    settings.legend_position,
+    settings.legend_x_offset,
+    settings.legend_y_offset);
+  drawLegendEntries(
+    painter,
+    rect,
+    settings,
+    right_entries,
+    settings.right_legend_position,
+    settings.right_legend_x_offset,
+    settings.right_legend_y_offset);
 }
 
 }  // namespace
@@ -511,25 +684,55 @@ QImage Plot2DRenderer::render(
     settings.now};
   const std::vector<PlotSample> samples = visibleSamples(
     series, time_range, settings.x_axis_mode);
+  const std::vector<PlotSample> left_axis_samples = visibleSamplesForAxis(
+    series, time_range, settings.x_axis_mode, SeriesAxis::Left);
+  const std::vector<PlotSample> right_axis_samples = visibleSamplesForAxis(
+    series, time_range, settings.x_axis_mode, SeriesAxis::Right);
+  const bool has_right_axis = hasEnabledSeriesOnAxis(series, SeriesAxis::Right);
   PlotRange x_range = xRangeForSettings(settings, samples);
-  PlotRange y_range = yRangeForSettings(settings, samples);
+  PlotRange left_y_range = yRangeForAxis(
+    settings.y_scale_mode,
+    settings.fixed_y_min,
+    settings.fixed_y_max,
+    settings.y_padding_fraction,
+    left_axis_samples.empty() ? samples : left_axis_samples);
+  PlotRange right_y_range = has_right_axis ?
+    yRangeForAxis(
+      settings.right_y_scale_mode,
+      settings.fixed_right_y_min,
+      settings.fixed_right_y_max,
+      settings.right_y_padding_fraction,
+      right_axis_samples) : left_y_range;
 
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
   painter.setFont(QFont(QStringLiteral("Sans Serif"), std::clamp(settings.font_size, 6, 16)));
 
-  QRectF rect = plotRect(settings, y_range, painter.fontMetrics());
+  QRectF rect = plotRect(
+    settings,
+    left_y_range,
+    right_y_range,
+    has_right_axis,
+    painter.fontMetrics());
   if (settings.x_axis_mode == XAxisMode::Field &&
-    settings.xy_axis_scale_mode == XYAxisScaleMode::Equal)
+    settings.xy_axis_scale_mode == XYAxisScaleMode::Equal &&
+    !has_right_axis)
   {
-    applyEqualXYScale(rect, x_range, y_range);
-    rect = plotRect(settings, y_range, painter.fontMetrics());
+    applyEqualXYScale(rect, x_range, left_y_range);
+    rect = plotRect(
+      settings,
+      left_y_range,
+      right_y_range,
+      has_right_axis,
+      painter.fontMetrics());
   }
 
-  drawGrid(painter, rect, x_range, y_range, settings);
-  drawReferences(painter, rect, y_range, references, settings);
+  drawGrid(painter, rect, x_range, left_y_range, right_y_range, has_right_axis, settings);
+  drawReferences(painter, rect, left_y_range, references, settings);
   for (const RenderableSeries & item : series) {
-    drawSeries(painter, rect, x_range, y_range, item);
+    const PlotRange & series_y_range =
+      item.axis == SeriesAxis::Right ? right_y_range : left_y_range;
+    drawSeries(painter, rect, x_range, series_y_range, item);
   }
   drawLegend(painter, rect, series, x_range, settings);
   return image;

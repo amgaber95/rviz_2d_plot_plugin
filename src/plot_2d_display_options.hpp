@@ -55,6 +55,9 @@ std::string plotModeName(PlotMode mode);
 PlotMode plotModeFromName(const std::string & name);
 void addPlotModeOptions(rviz_common::properties::EnumProperty * property);
 std::string seriesDefaultLabel(const SeriesConfig & series, PlotMode plot_mode);
+std::string seriesAxisName(SeriesAxis axis);
+SeriesAxis seriesAxisFromName(const std::string & name);
+void addSeriesAxisOptions(rviz_common::properties::EnumProperty * property);
 
 std::string xyHistoryModeName(XYHistoryMode mode);
 XYHistoryMode xyHistoryModeFromName(const std::string & name);

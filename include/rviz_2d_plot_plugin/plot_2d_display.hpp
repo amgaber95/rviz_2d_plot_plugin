@@ -99,6 +99,7 @@ private:
     rviz_common::properties::EditableEnumProperty * x_field{nullptr};
     rviz_common::properties::EditableEnumProperty * y_field{nullptr};
     rviz_common::properties::EditableEnumProperty * field{nullptr};
+    rviz_common::properties::EnumProperty * axis{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
     rviz_common::properties::StringProperty * unit{nullptr};
     rviz_common::properties::ColorProperty * color{nullptr};
@@ -214,6 +215,10 @@ private:
   rviz_common::properties::BoolProperty * auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};
   rviz_common::properties::FloatProperty * y_max_property_{nullptr};
+  rviz_common::properties::Property * right_y_axis_root_property_{nullptr};
+  rviz_common::properties::BoolProperty * right_y_auto_scale_property_{nullptr};
+  rviz_common::properties::FloatProperty * right_y_min_property_{nullptr};
+  rviz_common::properties::FloatProperty * right_y_max_property_{nullptr};
   rviz_common::properties::Property * grid_root_property_{nullptr};
   rviz_common::properties::BoolProperty * show_major_grid_property_{nullptr};
   rviz_common::properties::BoolProperty * show_minor_grid_property_{nullptr};
@@ -236,6 +241,13 @@ private:
   rviz_common::properties::EnumProperty * legend_position_property_{nullptr};
   rviz_common::properties::IntProperty * legend_x_offset_property_{nullptr};
   rviz_common::properties::IntProperty * legend_y_offset_property_{nullptr};
+  rviz_common::properties::Property * right_legend_root_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_right_legend_property_{nullptr};
+  rviz_common::properties::BoolProperty * merge_right_legend_with_left_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_right_latest_values_property_{nullptr};
+  rviz_common::properties::EnumProperty * right_legend_position_property_{nullptr};
+  rviz_common::properties::IntProperty * right_legend_x_offset_property_{nullptr};
+  rviz_common::properties::IntProperty * right_legend_y_offset_property_{nullptr};
   rviz_common::properties::Property * layout_root_property_{nullptr};
   rviz_common::properties::IntProperty * width_property_{nullptr};
   rviz_common::properties::IntProperty * height_property_{nullptr};
