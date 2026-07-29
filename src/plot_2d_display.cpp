@@ -8,10 +8,14 @@
 
 #include <QColor>
 #include <QImage>
+#include <QLabel>
 #include <QObject>
+#include <QPixmap>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVariant>
+#include <QVBoxLayout>
+#include <QWidget>
 
 #include <algorithm>
 #include <cstddef>
@@ -42,6 +46,40 @@
 
 namespace rviz_2d_plot_plugin
 {
+
+class PlotImagePanelWidget final : public QWidget
+{
+public:
+  explicit PlotImagePanelWidget(QWidget * parent = nullptr)
+  : QWidget(parent), image_label_(new QLabel(this))
+  {
+    auto * layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(image_label_);
+    image_label_->setAlignment(Qt::AlignCenter);
+    image_label_->setScaledContents(false);
+    setMinimumSize(120, 80);
+    resize(360, 220);
+  }
+
+  void setImage(const QImage & image)
+  {
+    image_label_->setPixmap(QPixmap::fromImage(image));
+  }
+
+  QSize renderSize() const
+  {
+    const QSize content = image_label_->contentsRect().size();
+    if (content.width() > 0 && content.height() > 0) {
+      return content;
+    }
+    return size();
+  }
+
+private:
+  QLabel * image_label_;
+};
+
 namespace
 {
 
@@ -95,6 +133,13 @@ Plot2DDisplay::Plot2DDisplay()
   clear_history_property_ = new rviz_common::properties::BoolProperty(
     "Clear History", false, "Clear stored samples for this plot.",
     this, SLOT(onClearHistoryChanged()), this);
+
+  display_surface_property_ = new rviz_common::properties::EnumProperty(
+    "Display Surface",
+    QString::fromStdString(displaySurfaceName(DisplaySurface::Panel)),
+    "Choose whether the plot is shown as a 3D viewport overlay or in a dockable panel.",
+    this, SLOT(onDisplaySurfaceChanged()), this);
+  addDisplaySurfaceOptions(display_surface_property_);
 
   plot_mode_property_ = new rviz_common::properties::EnumProperty(
     "Plot Mode", QString::fromStdString(plotModeName(PlotMode::TimeSeries)),
@@ -350,9 +395,16 @@ Plot2DDisplay::Plot2DDisplay()
     "Font Size", 8, "Axis, legend, and reference label font size in points.",
     style_root_property_, SLOT(onRenderPropertyChanged()), this, 6, 16);
   updateModePropertyVisibility_();
+  updatePresentationPropertyVisibility_(configFromProperties_());
 }
 
-Plot2DDisplay::~Plot2DDisplay() = default;
+Plot2DDisplay::~Plot2DDisplay()
+{
+  if (panel_widget_registered_) {
+    setAssociatedWidget(nullptr);
+    panel_widget_registered_ = false;
+  }
+}
 
 void Plot2DDisplay::load(const rviz_common::Config & config)
 {
@@ -369,6 +421,7 @@ void Plot2DDisplay::load(const rviz_common::Config & config)
 
   rviz_common::Display::load(config);
   updateModePropertyVisibility_();
+  updatePresentationPropertyVisibility_(configFromProperties_());
   updateSeriesPropertySummaries_();
   updateReferencePropertySummaries_();
 }
@@ -404,13 +457,17 @@ void Plot2DDisplay::onInitialize()
   }
 
   initializeOverlayBackend_();
+  initializePanelWidget_();
+  synchronizePresentationMode_(configFromProperties_());
   resolveAndSubscribe_();
 }
 
 void Plot2DDisplay::onEnable()
 {
+  const Plot2DConfig config = configFromProperties_();
   resolveAndSubscribe_();
-  if (overlay_backend_) {
+  synchronizePresentationMode_(config);
+  if (config.display_surface == DisplaySurface::Overlay && overlay_backend_) {
     overlay_backend_->setVisible(true);
   }
   renderOverlay_();
@@ -421,6 +478,9 @@ void Plot2DDisplay::onDisable()
   unsubscribe_();
   if (overlay_backend_) {
     overlay_backend_->setVisible(false);
+  }
+  if (panel_widget_registered_ && getAssociatedWidget()) {
+    getAssociatedWidget()->hide();
   }
 }
 
@@ -463,6 +523,14 @@ void Plot2DDisplay::onConfigPropertyChanged()
 
 void Plot2DDisplay::onRenderPropertyChanged()
 {
+  renderOverlay_();
+}
+
+void Plot2DDisplay::onDisplaySurfaceChanged()
+{
+  const Plot2DConfig config = configFromProperties_();
+  synchronizePresentationMode_(config);
+  updatePresentationPropertyVisibility_(config);
   renderOverlay_();
 }
 
@@ -770,6 +838,9 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.references = referenceConfigFromProperties_();
   config.plot_mode = plot_mode_property_ ?
     plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
+  config.display_surface = display_surface_property_ ?
+    displaySurfaceFromName(display_surface_property_->getStdString()) :
+    DisplaySurface::Overlay;
 
   config.time.window_seconds = window_seconds_property_->getFloat();
   config.time.refresh_rate_hz = refresh_rate_property_->getFloat();
@@ -1225,6 +1296,12 @@ void Plot2DDisplay::updateModePropertyVisibility_()
       series.y_field->setHidden(!xy_mode);
     }
   }
+
+  Plot2DConfig config;
+  config.display_surface = display_surface_property_ ?
+    displaySurfaceFromName(display_surface_property_->getStdString()) :
+    DisplaySurface::Overlay;
+  updatePresentationPropertyVisibility_(config);
 }
 
 void Plot2DDisplay::updateSeriesPropertySummaries_()
@@ -1442,7 +1519,7 @@ Plot2DDisplay::RenderSnapshot Plot2DDisplay::renderSnapshot_() const
 
 PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
 {
-  return renderSettingsFromConfig_(configFromProperties_());
+  return renderSettingsForSurface_(configFromProperties_());
 }
 
 PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig & config) const
@@ -1509,6 +1586,19 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
     y_major_tick_count_property_->getInt() : 5;
   settings.minor_grid_divisions = minor_grid_divisions_property_ ?
     minor_grid_divisions_property_->getInt() : 1;
+  return settings;
+}
+
+PlotRenderSettings Plot2DDisplay::renderSettingsForSurface_(const Plot2DConfig & config) const
+{
+  PlotRenderSettings settings = renderSettingsFromConfig_(config);
+  if (config.display_surface != DisplaySurface::Panel) {
+    return settings;
+  }
+
+  const QSize panel_size = panelRenderSize_();
+  settings.width = std::max(panel_size.width(), 120);
+  settings.height = std::max(panel_size.height(), 80);
   return settings;
 }
 
@@ -1605,6 +1695,54 @@ void Plot2DDisplay::initializeOverlayBackend_()
   overlay_backend_->setVisible(false);
 }
 
+void Plot2DDisplay::initializePanelWidget_()
+{
+  if (panel_widget_) {
+    return;
+  }
+
+  panel_widget_ = new PlotImagePanelWidget();
+  panel_widget_->setWindowTitle(getName());
+}
+
+void Plot2DDisplay::synchronizePresentationMode_(const Plot2DConfig & config)
+{
+  const bool panel_mode = config.display_surface == DisplaySurface::Panel;
+  if (panel_mode) {
+    initializePanelWidget_();
+    if (panel_widget_) {
+      panel_widget_->setWindowTitle(getName());
+    }
+    if (overlay_backend_) {
+      overlay_backend_->setVisible(false);
+    }
+    if (isEnabled() && panel_widget_ && !panel_widget_registered_) {
+      setAssociatedWidget(panel_widget_);
+      panel_widget_registered_ = true;
+    }
+    if (isEnabled() && panel_widget_registered_ && getAssociatedWidget()) {
+      getAssociatedWidget()->show();
+    }
+    return;
+  }
+
+  if (panel_widget_registered_ && getAssociatedWidget()) {
+    getAssociatedWidget()->hide();
+  }
+  if (overlay_backend_ && isEnabled()) {
+    overlay_backend_->setVisible(isEnabled());
+  }
+}
+
+void Plot2DDisplay::updatePresentationPropertyVisibility_(const Plot2DConfig & config)
+{
+  if (!layout_root_property_) {
+    return;
+  }
+  const bool panel_mode = config.display_surface == DisplaySurface::Panel;
+  layout_root_property_->setHidden(panel_mode);
+}
+
 void Plot2DDisplay::updateOverlayGeometry_()
 {
   updateOverlayGeometry_(configFromProperties_());
@@ -1636,13 +1774,38 @@ void Plot2DDisplay::updateOverlayGeometry_(const Plot2DConfig & config)
   }
 }
 
+QSize Plot2DDisplay::panelRenderSize_() const
+{
+  if (panel_widget_) {
+    return panel_widget_->renderSize();
+  }
+  return QSize(
+    width_property_ ? width_property_->getInt() : 360,
+    height_property_ ? height_property_->getInt() : 220);
+}
+
 void Plot2DDisplay::renderOverlay_(const bool request_rviz_render)
 {
+  const RenderSnapshot snapshot = renderSnapshot_();
+  synchronizePresentationMode_(snapshot.config);
+
+  const PlotRenderSettings settings = renderSettingsForSurface_(snapshot.config);
+  const QImage rendered = renderer_.render(
+    settings,
+    renderableSeriesFromSnapshot_(snapshot),
+    renderableReferencesFromConfig_(snapshot.config));
+
+  if (snapshot.config.display_surface == DisplaySurface::Panel) {
+    if (panel_widget_ && panel_widget_registered_) {
+      panel_widget_->setImage(rendered);
+    }
+    return;
+  }
+
   if (!overlay_backend_) {
     return;
   }
 
-  const RenderSnapshot snapshot = renderSnapshot_();
   updateOverlayGeometry_(snapshot.config);
   if (isEnabled()) {
     overlay_backend_->setVisible(true);
@@ -1650,12 +1813,6 @@ void Plot2DDisplay::renderOverlay_(const bool request_rviz_render)
   if (!overlay_backend_->isReady()) {
     return;
   }
-
-  const PlotRenderSettings settings = renderSettingsFromConfig_(snapshot.config);
-  const QImage rendered = renderer_.render(
-    settings,
-    renderableSeriesFromSnapshot_(snapshot),
-    renderableReferencesFromConfig_(snapshot.config));
 
   const OverlayBackendResult image_result = overlay_backend_->updateImage(rendered);
   if (!image_result.ok()) {

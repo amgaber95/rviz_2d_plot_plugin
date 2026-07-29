@@ -49,6 +49,12 @@ enum class PlotMode
   XY,
 };
 
+enum class DisplaySurface
+{
+  Overlay,
+  Panel,
+};
+
 enum class XYHistoryMode
 {
   RollingTimeWindow,
@@ -215,6 +221,7 @@ struct Plot2DConfig
   std::vector<SeriesConfig> series{SeriesConfig{}};
   std::vector<ReferenceConfig> references;
   PlotMode plot_mode{PlotMode::TimeSeries};
+  DisplaySurface display_surface{DisplaySurface::Panel};
   XAxisConfig x_axis;
   AxisConfig y_axis;
   AxisConfig y_axis_right;

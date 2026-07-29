@@ -10,6 +10,7 @@ namespace
 {
 
 using rviz_2d_plot_plugin::AxisScaleMode;
+using rviz_2d_plot_plugin::DisplaySurface;
 using rviz_2d_plot_plugin::HorizontalAlignment;
 using rviz_2d_plot_plugin::LegendPosition;
 using rviz_2d_plot_plugin::Plot2DConfig;
@@ -53,6 +54,7 @@ TEST(Plot2DDisplay, CreatesMvpPropertyLayout)
   ASSERT_NE(nullptr, Plot2DDisplayTestAccessor::layoutRoot(display));
   EXPECT_EQ(findChild(&display, "Pause Plot"), Plot2DDisplayTestAccessor::pausePlot(display));
   EXPECT_EQ(findChild(&display, "Clear History"), Plot2DDisplayTestAccessor::clearHistory(display));
+  EXPECT_NE(nullptr, findChild(&display, "Display Surface"));
   EXPECT_NE(nullptr, findChild(&display, "Plot Mode"));
 
   auto * series = findChild(Plot2DDisplayTestAccessor::seriesRoot(display), "Series 1");
@@ -192,6 +194,24 @@ TEST(Plot2DDisplay, PlotModeSwitchesBetweenTimeAndXYSeriesFields)
   EXPECT_FALSE(y_field->getHidden());
   EXPECT_FALSE(Plot2DDisplayTestAccessor::xAxisRoot(display)->getHidden());
   EXPECT_FALSE(xy_history_mode->getHidden());
+}
+
+TEST(Plot2DDisplay, DisplaySurfaceToggleHidesOverlayLayoutProperties)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  auto * layout = Plot2DDisplayTestAccessor::layoutRoot(display);
+  ASSERT_NE(nullptr, layout);
+  auto * display_surface = findChild(&display, "Display Surface");
+  ASSERT_NE(nullptr, display_surface);
+
+  EXPECT_TRUE(layout->getHidden());
+
+  display_surface->setValue("3D Overlay");
+  EXPECT_FALSE(layout->getHidden());
+
+  display_surface->setValue("Dock Panel");
+  EXPECT_TRUE(layout->getHidden());
 }
 
 TEST(Plot2DDisplay, SeriesRootShowsConfiguredSourceForPlotMode)
@@ -356,6 +376,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
     "Center");
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Vertical Alignment")->setValue(
     "Bottom");
+  findChild(&display, "Display Surface")->setValue("Dock Panel");
 
   const Plot2DConfig config = Plot2DDisplayTestAccessor::configFromProperties(display);
 
@@ -385,6 +406,7 @@ TEST(Plot2DDisplay, BuildsPlotConfigFromProperties)
   EXPECT_EQ(config.qos.durability, QoSDurability::TransientLocal);
   EXPECT_EQ(config.qos.depth, 42);
   EXPECT_EQ(config.plot_mode, PlotMode::XY);
+  EXPECT_EQ(config.display_surface, DisplaySurface::Panel);
   EXPECT_EQ(config.x_axis.mode, XAxisMode::Field);
   EXPECT_EQ(config.x_axis.scale_mode, AxisScaleMode::Fixed);
   EXPECT_EQ(config.x_axis.axis_scale_mode, XYAxisScaleMode::Equal);

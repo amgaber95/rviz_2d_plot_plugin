@@ -235,6 +235,34 @@ void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(plotModeName(PlotMode::XY));
 }
 
+std::string displaySurfaceName(const DisplaySurface surface)
+{
+  switch (surface) {
+    case DisplaySurface::Overlay:
+      return "3D Overlay";
+    case DisplaySurface::Panel:
+      return "Dock Panel";
+  }
+  return "3D Overlay";
+}
+
+DisplaySurface displaySurfaceFromName(const std::string & name)
+{
+  if (name == "Dock Panel") {
+    return DisplaySurface::Panel;
+  }
+  return DisplaySurface::Overlay;
+}
+
+void addDisplaySurfaceOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(displaySurfaceName(DisplaySurface::Overlay));
+  property->addOptionStd(displaySurfaceName(DisplaySurface::Panel));
+}
+
 std::string seriesDefaultLabel(const SeriesConfig & series, const PlotMode plot_mode)
 {
   if (series.topic.empty()) {
