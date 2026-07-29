@@ -49,6 +49,7 @@ TEST(Plot2DDisplay, InitializesInjectedOverlayBackend)
       backend = created.get();
       return created;
     });
+  findChild(&display, "Display Surface")->setValue("3D Overlay");
 
   Plot2DDisplayTestAccessor::initializeOverlayBackend(display);
 
@@ -99,6 +100,7 @@ TEST(Plot2DDisplay, RenderOverlayUpdatesGeometryBeforeImageUpload)
       backend = created.get();
       return created;
     });
+  findChild(&display, "Display Surface")->setValue("3D Overlay");
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Width")->setValue(420);
   findChild(Plot2DDisplayTestAccessor::layoutRoot(display), "Height")->setValue(180);
   Plot2DDisplayTestAccessor::initializeOverlayBackend(display);
@@ -121,6 +123,31 @@ TEST(Plot2DDisplay, RenderOverlayUpdatesGeometryBeforeImageUpload)
   EXPECT_EQ(backend->geometries[0].height, 180);
   ASSERT_EQ(backend->image_sizes.size(), 1U);
   EXPECT_EQ(backend->image_sizes[0], std::make_pair(420, 180));
+}
+
+TEST(Plot2DDisplay, DockPanelSurfaceSkipsOverlayImageUpload)
+{
+  ensureQtApplication();
+  Plot2DDisplay display;
+  RecordingOverlayBackend * backend = nullptr;
+  Plot2DDisplayTestAccessor::setOverlayBackendFactory(
+    display,
+    [&backend](std::string) {
+      auto created = std::make_unique<RecordingOverlayBackend>();
+      backend = created.get();
+      return created;
+    });
+  findChild(&display, "Display Surface")->setValue("Dock Panel");
+  Plot2DDisplayTestAccessor::initializeOverlayBackend(display);
+  ASSERT_NE(nullptr, backend);
+  backend->events.clear();
+  backend->geometries.clear();
+  backend->image_sizes.clear();
+
+  Plot2DDisplayTestAccessor::renderOverlay(display);
+
+  EXPECT_TRUE(backend->geometries.empty());
+  EXPECT_TRUE(backend->image_sizes.empty());
 }
 
 TEST(Plot2DDisplay, KeepsConfiguredSeriesRenderableBeforeTopicResolves)
