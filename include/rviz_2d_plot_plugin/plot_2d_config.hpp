@@ -49,6 +49,12 @@ enum class PlotMode
   XY,
 };
 
+enum class DisplaySurface
+{
+  Overlay,
+  Panel,
+};
+
 enum class XYHistoryMode
 {
   RollingTimeWindow,
@@ -59,6 +65,12 @@ enum class XYAxisScaleMode
 {
   Independent,
   Equal,
+};
+
+enum class SeriesAxis
+{
+  Left,
+  Right,
 };
 
 enum class TimeSource
@@ -170,6 +182,7 @@ struct SeriesColor
 struct SeriesConfig
 {
   bool enabled{true};
+  SeriesAxis axis{SeriesAxis::Left};
   std::string topic;
   std::string x_field;
   std::string y_field;
@@ -208,8 +221,10 @@ struct Plot2DConfig
   std::vector<SeriesConfig> series{SeriesConfig{}};
   std::vector<ReferenceConfig> references;
   PlotMode plot_mode{PlotMode::TimeSeries};
+  DisplaySurface display_surface{DisplaySurface::Panel};
   XAxisConfig x_axis;
   AxisConfig y_axis;
+  AxisConfig y_axis_right;
   TimeConfig time;
   QoSConfig qos;
   LayoutConfig layout;

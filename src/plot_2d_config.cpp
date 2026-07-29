@@ -130,6 +130,7 @@ void Plot2DConfig::repair()
   }
 
   y_axis.repairFixedRange();
+  y_axis_right.repairFixedRange();
   x_axis.repairFixedRange();
   time.repair();
   qos.repair();

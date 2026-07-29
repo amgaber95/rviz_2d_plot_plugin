@@ -85,6 +85,11 @@ public:
     return display.y_axis_root_property_;
   }
 
+  static rviz_common::properties::Property * rightYAxisRoot(Plot2DDisplay & display)
+  {
+    return display.right_y_axis_root_property_;
+  }
+
   static rviz_common::properties::Property * xAxisRoot(Plot2DDisplay & display)
   {
     return display.x_axis_root_property_;

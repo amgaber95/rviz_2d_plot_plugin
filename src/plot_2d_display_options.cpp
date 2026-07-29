@@ -235,6 +235,34 @@ void addPlotModeOptions(rviz_common::properties::EnumProperty * property)
   property->addOptionStd(plotModeName(PlotMode::XY));
 }
 
+std::string displaySurfaceName(const DisplaySurface surface)
+{
+  switch (surface) {
+    case DisplaySurface::Overlay:
+      return "3D Overlay";
+    case DisplaySurface::Panel:
+      return "Dock Panel";
+  }
+  return "3D Overlay";
+}
+
+DisplaySurface displaySurfaceFromName(const std::string & name)
+{
+  if (name == "Dock Panel") {
+    return DisplaySurface::Panel;
+  }
+  return DisplaySurface::Overlay;
+}
+
+void addDisplaySurfaceOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(displaySurfaceName(DisplaySurface::Overlay));
+  property->addOptionStd(displaySurfaceName(DisplaySurface::Panel));
+}
+
 std::string seriesDefaultLabel(const SeriesConfig & series, const PlotMode plot_mode)
 {
   if (series.topic.empty()) {
@@ -246,6 +274,34 @@ std::string seriesDefaultLabel(const SeriesConfig & series, const PlotMode plot_
 
   const std::string separator = series.field.front() == '/' ? "" : "/";
   return series.topic + separator + series.field;
+}
+
+std::string seriesAxisName(const SeriesAxis axis)
+{
+  switch (axis) {
+    case SeriesAxis::Left:
+      return "Left";
+    case SeriesAxis::Right:
+      return "Right";
+  }
+  return "Left";
+}
+
+SeriesAxis seriesAxisFromName(const std::string & name)
+{
+  if (name == "Right") {
+    return SeriesAxis::Right;
+  }
+  return SeriesAxis::Left;
+}
+
+void addSeriesAxisOptions(rviz_common::properties::EnumProperty * property)
+{
+  if (!property) {
+    return;
+  }
+  property->addOptionStd(seriesAxisName(SeriesAxis::Left));
+  property->addOptionStd(seriesAxisName(SeriesAxis::Right));
 }
 
 std::string xyHistoryModeName(const XYHistoryMode mode)

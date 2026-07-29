@@ -22,6 +22,8 @@
 #include "rviz_2d_plot_plugin/plot_2d_renderer.hpp"
 #include "rviz_2d_plot_plugin/topic_field_introspection.hpp"
 
+class QSize;
+
 namespace rviz_common
 {
 class Config;
@@ -43,6 +45,7 @@ namespace rviz_2d_plot_plugin
 {
 
 class OverlayBackend;
+class PlotImagePanelWidget;
 class Plot2DDisplayTestAccessor;
 class Plot2DSubscriptionManager;
 
@@ -68,6 +71,7 @@ protected:
 private Q_SLOTS:
   void onConfigPropertyChanged();
   void onRenderPropertyChanged();
+  void onDisplaySurfaceChanged();
   void onSeriesAppearancePropertyChanged();
   void onReferencePropertyChanged();
   void onPlotModeChanged();
@@ -99,6 +103,7 @@ private:
     rviz_common::properties::EditableEnumProperty * x_field{nullptr};
     rviz_common::properties::EditableEnumProperty * y_field{nullptr};
     rviz_common::properties::EditableEnumProperty * field{nullptr};
+    rviz_common::properties::EnumProperty * axis{nullptr};
     rviz_common::properties::StringProperty * label{nullptr};
     rviz_common::properties::StringProperty * unit{nullptr};
     rviz_common::properties::ColorProperty * color{nullptr};
@@ -170,6 +175,7 @@ private:
   RenderSnapshot renderSnapshot_() const;
   PlotRenderSettings renderSettingsFromProperties_() const;
   PlotRenderSettings renderSettingsFromConfig_(const Plot2DConfig & config) const;
+  PlotRenderSettings renderSettingsForSurface_(const Plot2DConfig & config) const;
   std::vector<RenderableSeries> renderableSeries_() const;
   std::vector<RenderableSeries> renderableSeriesFromSnapshot_(
     const RenderSnapshot & snapshot) const;
@@ -177,8 +183,12 @@ private:
   std::vector<RenderableReference> renderableReferencesFromConfig_(
     const Plot2DConfig & config) const;
   void initializeOverlayBackend_();
+  void initializePanelWidget_();
+  void synchronizePresentationMode_(const Plot2DConfig & config);
+  void updatePresentationPropertyVisibility_(const Plot2DConfig & config);
   void updateOverlayGeometry_();
   void updateOverlayGeometry_(const Plot2DConfig & config);
+  QSize panelRenderSize_() const;
   void renderOverlay_(bool request_rviz_render = true);
   void unsubscribe_();
   bool shouldRetrySubscriptions_() const;
@@ -190,6 +200,7 @@ private:
 
   rviz_common::properties::BoolProperty * pause_plot_property_{nullptr};
   rviz_common::properties::BoolProperty * clear_history_property_{nullptr};
+  rviz_common::properties::EnumProperty * display_surface_property_{nullptr};
   rviz_common::properties::EnumProperty * plot_mode_property_{nullptr};
   rviz_common::properties::Property * series_root_property_{nullptr};
   rviz_common::properties::IntProperty * series_count_property_{nullptr};
@@ -214,6 +225,10 @@ private:
   rviz_common::properties::BoolProperty * auto_scale_property_{nullptr};
   rviz_common::properties::FloatProperty * y_min_property_{nullptr};
   rviz_common::properties::FloatProperty * y_max_property_{nullptr};
+  rviz_common::properties::Property * right_y_axis_root_property_{nullptr};
+  rviz_common::properties::BoolProperty * right_y_auto_scale_property_{nullptr};
+  rviz_common::properties::FloatProperty * right_y_min_property_{nullptr};
+  rviz_common::properties::FloatProperty * right_y_max_property_{nullptr};
   rviz_common::properties::Property * grid_root_property_{nullptr};
   rviz_common::properties::BoolProperty * show_major_grid_property_{nullptr};
   rviz_common::properties::BoolProperty * show_minor_grid_property_{nullptr};
@@ -232,9 +247,17 @@ private:
   rviz_common::properties::Property * legend_root_property_{nullptr};
   rviz_common::properties::BoolProperty * show_legend_property_{nullptr};
   rviz_common::properties::BoolProperty * show_latest_values_property_{nullptr};
+  rviz_common::properties::BoolProperty * legend_field_name_only_property_{nullptr};
   rviz_common::properties::EnumProperty * legend_position_property_{nullptr};
   rviz_common::properties::IntProperty * legend_x_offset_property_{nullptr};
   rviz_common::properties::IntProperty * legend_y_offset_property_{nullptr};
+  rviz_common::properties::Property * right_legend_root_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_right_legend_property_{nullptr};
+  rviz_common::properties::BoolProperty * merge_right_legend_with_left_property_{nullptr};
+  rviz_common::properties::BoolProperty * show_right_latest_values_property_{nullptr};
+  rviz_common::properties::EnumProperty * right_legend_position_property_{nullptr};
+  rviz_common::properties::IntProperty * right_legend_x_offset_property_{nullptr};
+  rviz_common::properties::IntProperty * right_legend_y_offset_property_{nullptr};
   rviz_common::properties::Property * layout_root_property_{nullptr};
   rviz_common::properties::IntProperty * width_property_{nullptr};
   rviz_common::properties::IntProperty * height_property_{nullptr};
@@ -251,6 +274,8 @@ private:
   rviz_common::properties::IntProperty * font_size_property_{nullptr};
 
   std::unique_ptr<OverlayBackend> overlay_backend_;
+  PlotImagePanelWidget * panel_widget_{nullptr};
+  bool panel_widget_registered_{false};
   std::function<std::unique_ptr<OverlayBackend>(std::string)> overlay_backend_factory_;
   rclcpp::Node::SharedPtr node_;
   RosGraphOps ros_graph_ops_;

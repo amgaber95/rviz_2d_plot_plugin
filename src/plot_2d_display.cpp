@@ -8,10 +8,14 @@
 
 #include <QColor>
 #include <QImage>
+#include <QLabel>
 #include <QObject>
+#include <QPixmap>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVariant>
+#include <QVBoxLayout>
+#include <QWidget>
 
 #include <algorithm>
 #include <cstddef>
@@ -42,6 +46,40 @@
 
 namespace rviz_2d_plot_plugin
 {
+
+class PlotImagePanelWidget final : public QWidget
+{
+public:
+  explicit PlotImagePanelWidget(QWidget * parent = nullptr)
+  : QWidget(parent), image_label_(new QLabel(this))
+  {
+    auto * layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(image_label_);
+    image_label_->setAlignment(Qt::AlignCenter);
+    image_label_->setScaledContents(false);
+    setMinimumSize(120, 80);
+    resize(360, 220);
+  }
+
+  void setImage(const QImage & image)
+  {
+    image_label_->setPixmap(QPixmap::fromImage(image));
+  }
+
+  QSize renderSize() const
+  {
+    const QSize content = image_label_->contentsRect().size();
+    if (content.width() > 0 && content.height() > 0) {
+      return content;
+    }
+    return size();
+  }
+
+private:
+  QLabel * image_label_;
+};
+
 namespace
 {
 
@@ -95,6 +133,13 @@ Plot2DDisplay::Plot2DDisplay()
   clear_history_property_ = new rviz_common::properties::BoolProperty(
     "Clear History", false, "Clear stored samples for this plot.",
     this, SLOT(onClearHistoryChanged()), this);
+
+  display_surface_property_ = new rviz_common::properties::EnumProperty(
+    "Display Surface",
+    QString::fromStdString(displaySurfaceName(DisplaySurface::Panel)),
+    "Choose whether the plot is shown as a 3D viewport overlay or in a dockable panel.",
+    this, SLOT(onDisplaySurfaceChanged()), this);
+  addDisplaySurfaceOptions(display_surface_property_);
 
   plot_mode_property_ = new rviz_common::properties::EnumProperty(
     "Plot Mode", QString::fromStdString(plotModeName(PlotMode::TimeSeries)),
@@ -184,6 +229,18 @@ Plot2DDisplay::Plot2DDisplay()
     "Y Max", 1.0F, "Fixed y-axis maximum when auto scale is disabled.",
     y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
 
+  right_y_axis_root_property_ = new rviz_common::properties::Property(
+    "Right Y Axis", QVariant(), "Secondary right-side vertical axis scaling.", this);
+  right_y_auto_scale_property_ = new rviz_common::properties::BoolProperty(
+    "Auto Scale", true, "Automatically fit the right y-axis to visible samples.",
+    right_y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_y_min_property_ = new rviz_common::properties::FloatProperty(
+    "Y Min", -1.0F, "Fixed right y-axis minimum when auto scale is disabled.",
+    right_y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_y_max_property_ = new rviz_common::properties::FloatProperty(
+    "Y Max", 1.0F, "Fixed right y-axis maximum when auto scale is disabled.",
+    right_y_axis_root_property_, SLOT(onRenderPropertyChanged()), this);
+
   grid_root_property_ = new rviz_common::properties::Property(
     "Grid", QVariant(), "Plot grid density and visibility.", this);
   show_major_grid_property_ = new rviz_common::properties::BoolProperty(
@@ -241,6 +298,10 @@ Plot2DDisplay::Plot2DDisplay()
   show_latest_values_property_ = new rviz_common::properties::BoolProperty(
     "Show Values", true, "Show latest visible sample values next to legend labels.",
     legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  legend_field_name_only_property_ = new rviz_common::properties::BoolProperty(
+    "Field Name Only", false,
+    "Show only the terminal field token in legend labels (for example pose/position/x -> x).",
+    legend_root_property_, SLOT(onRenderPropertyChanged()), this);
   legend_position_property_ = new rviz_common::properties::EnumProperty(
     "Position", QString::fromStdString(legendPositionName(LegendPosition::TopLeft)),
     "Legend placement inside the plot area.",
@@ -254,6 +315,35 @@ Plot2DDisplay::Plot2DDisplay()
     "Y Offset", 4, "Vertical legend inset in pixels.",
     legend_root_property_, SLOT(onRenderPropertyChanged()), this);
   legend_y_offset_property_->setMin(0);
+  right_legend_root_property_ = new rviz_common::properties::Property(
+    "Right Legend", QVariant(),
+    "Secondary legend for right-axis series.",
+    legend_root_property_);
+  show_right_legend_property_ = new rviz_common::properties::BoolProperty(
+    "Enabled", true,
+    "Show the right-axis legend.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  merge_right_legend_with_left_property_ = new rviz_common::properties::BoolProperty(
+    "Merge With Left", false,
+    "Render right-axis series entries in the main legend.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  show_right_latest_values_property_ = new rviz_common::properties::BoolProperty(
+    "Show Values", true,
+    "Show latest visible sample values next to right-axis legend labels.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_legend_position_property_ = new rviz_common::properties::EnumProperty(
+    "Position", QString::fromStdString(legendPositionName(LegendPosition::TopRight)),
+    "Right legend placement inside the plot area.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  addLegendPositionOptions(right_legend_position_property_);
+  right_legend_x_offset_property_ = new rviz_common::properties::IntProperty(
+    "X Offset", 4, "Horizontal right legend inset in pixels.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_legend_x_offset_property_->setMin(0);
+  right_legend_y_offset_property_ = new rviz_common::properties::IntProperty(
+    "Y Offset", 4, "Vertical right legend inset in pixels.",
+    right_legend_root_property_, SLOT(onRenderPropertyChanged()), this);
+  right_legend_y_offset_property_->setMin(0);
 
   layout_root_property_ = new rviz_common::properties::Property(
     "Layout", QVariant(), "Overlay size and screen position.", this);
@@ -305,9 +395,16 @@ Plot2DDisplay::Plot2DDisplay()
     "Font Size", 8, "Axis, legend, and reference label font size in points.",
     style_root_property_, SLOT(onRenderPropertyChanged()), this, 6, 16);
   updateModePropertyVisibility_();
+  updatePresentationPropertyVisibility_(configFromProperties_());
 }
 
-Plot2DDisplay::~Plot2DDisplay() = default;
+Plot2DDisplay::~Plot2DDisplay()
+{
+  if (panel_widget_registered_) {
+    setAssociatedWidget(nullptr);
+    panel_widget_registered_ = false;
+  }
+}
 
 void Plot2DDisplay::load(const rviz_common::Config & config)
 {
@@ -324,6 +421,7 @@ void Plot2DDisplay::load(const rviz_common::Config & config)
 
   rviz_common::Display::load(config);
   updateModePropertyVisibility_();
+  updatePresentationPropertyVisibility_(configFromProperties_());
   updateSeriesPropertySummaries_();
   updateReferencePropertySummaries_();
 }
@@ -359,13 +457,17 @@ void Plot2DDisplay::onInitialize()
   }
 
   initializeOverlayBackend_();
+  initializePanelWidget_();
+  synchronizePresentationMode_(configFromProperties_());
   resolveAndSubscribe_();
 }
 
 void Plot2DDisplay::onEnable()
 {
+  const Plot2DConfig config = configFromProperties_();
   resolveAndSubscribe_();
-  if (overlay_backend_) {
+  synchronizePresentationMode_(config);
+  if (config.display_surface == DisplaySurface::Overlay && overlay_backend_) {
     overlay_backend_->setVisible(true);
   }
   renderOverlay_();
@@ -376,6 +478,9 @@ void Plot2DDisplay::onDisable()
   unsubscribe_();
   if (overlay_backend_) {
     overlay_backend_->setVisible(false);
+  }
+  if (panel_widget_registered_ && getAssociatedWidget()) {
+    getAssociatedWidget()->hide();
   }
 }
 
@@ -418,6 +523,14 @@ void Plot2DDisplay::onConfigPropertyChanged()
 
 void Plot2DDisplay::onRenderPropertyChanged()
 {
+  renderOverlay_();
+}
+
+void Plot2DDisplay::onDisplaySurfaceChanged()
+{
+  const Plot2DConfig config = configFromProperties_();
+  synchronizePresentationMode_(config);
+  updatePresentationPropertyVisibility_(config);
   renderOverlay_();
 }
 
@@ -678,6 +791,8 @@ std::vector<SeriesConfig> Plot2DDisplay::seriesConfigFromProperties_() const
     config.x_field = properties.x_field ? properties.x_field->getStdString() : "";
     config.y_field = properties.y_field ? properties.y_field->getStdString() : "";
     config.field = properties.field ? properties.field->getStdString() : "";
+    config.axis = properties.axis ?
+      seriesAxisFromName(properties.axis->getStdString()) : SeriesAxis::Left;
     config.label = properties.label ? properties.label->getStdString() : "Series";
     config.unit = properties.unit ? properties.unit->getStdString() : "";
     config.color = properties.color ? toSeriesColor(properties.color->getColor()) :
@@ -723,6 +838,9 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
   config.references = referenceConfigFromProperties_();
   config.plot_mode = plot_mode_property_ ?
     plotModeFromName(plot_mode_property_->getStdString()) : PlotMode::TimeSeries;
+  config.display_surface = display_surface_property_ ?
+    displaySurfaceFromName(display_surface_property_->getStdString()) :
+    DisplaySurface::Overlay;
 
   config.time.window_seconds = window_seconds_property_->getFloat();
   config.time.refresh_rate_hz = refresh_rate_property_->getFloat();
@@ -754,6 +872,10 @@ Plot2DConfig Plot2DDisplay::configFromProperties_() const
     AxisScaleMode::Auto : AxisScaleMode::Fixed;
   config.y_axis.fixed_min = y_min_property_->getFloat();
   config.y_axis.fixed_max = y_max_property_->getFloat();
+  config.y_axis_right.scale_mode = right_y_auto_scale_property_->getBool() ?
+    AxisScaleMode::Auto : AxisScaleMode::Fixed;
+  config.y_axis_right.fixed_min = right_y_min_property_->getFloat();
+  config.y_axis_right.fixed_max = right_y_max_property_->getFloat();
 
   config.layout.width = width_property_->getInt();
   config.layout.height = height_property_->getInt();
@@ -821,6 +943,11 @@ Plot2DDisplay::SeriesPropertySet Plot2DDisplay::makeSeriesPropertySet_(
     &rviz_common::properties::EditableEnumProperty::requestOptions,
     this,
     &Plot2DDisplay::onFieldOptionsRequested);
+  properties.axis = new rviz_common::properties::EnumProperty(
+    "Axis", QString::fromStdString(seriesAxisName(value.axis)),
+    "Select whether this series uses the left or right y-axis.",
+    properties.root, SLOT(onConfigPropertyChanged()), this);
+  addSeriesAxisOptions(properties.axis);
   properties.label = new rviz_common::properties::StringProperty(
     "Label", QString::fromStdString(value.label), "Legend label for this series.",
     properties.root, SLOT(onSeriesAppearancePropertyChanged()), this);
@@ -1169,6 +1296,12 @@ void Plot2DDisplay::updateModePropertyVisibility_()
       series.y_field->setHidden(!xy_mode);
     }
   }
+
+  Plot2DConfig config;
+  config.display_surface = display_surface_property_ ?
+    displaySurfaceFromName(display_surface_property_->getStdString()) :
+    DisplaySurface::Overlay;
+  updatePresentationPropertyVisibility_(config);
 }
 
 void Plot2DDisplay::updateSeriesPropertySummaries_()
@@ -1386,7 +1519,7 @@ Plot2DDisplay::RenderSnapshot Plot2DDisplay::renderSnapshot_() const
 
 PlotRenderSettings Plot2DDisplay::renderSettingsFromProperties_() const
 {
-  return renderSettingsFromConfig_(configFromProperties_());
+  return renderSettingsForSurface_(configFromProperties_());
 }
 
 PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig & config) const
@@ -1406,6 +1539,10 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
   settings.fixed_y_min = config.y_axis.fixed_min;
   settings.fixed_y_max = config.y_axis.fixed_max;
   settings.y_padding_fraction = config.y_axis.padding_fraction;
+  settings.right_y_scale_mode = config.y_axis_right.scale_mode;
+  settings.fixed_right_y_min = config.y_axis_right.fixed_min;
+  settings.fixed_right_y_max = config.y_axis_right.fixed_max;
+  settings.right_y_padding_fraction = config.y_axis_right.padding_fraction;
   settings.background_color = background_color_property_->getColor();
   const float background_alpha = background_alpha_property_ ?
     background_alpha_property_->getFloat() : 190.0F / 255.0F;
@@ -1420,10 +1557,25 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
   settings.show_legend = show_legend_property_ ? show_legend_property_->getBool() : true;
   settings.show_latest_values = show_latest_values_property_ ?
     show_latest_values_property_->getBool() : true;
+  settings.legend_field_name_only = legend_field_name_only_property_ ?
+    legend_field_name_only_property_->getBool() : false;
   settings.legend_position = legend_position_property_ ?
     legendPositionFromName(legend_position_property_->getStdString()) : LegendPosition::TopLeft;
   settings.legend_x_offset = legend_x_offset_property_ ? legend_x_offset_property_->getInt() : 4;
   settings.legend_y_offset = legend_y_offset_property_ ? legend_y_offset_property_->getInt() : 4;
+  settings.show_right_legend = show_right_legend_property_ ?
+    show_right_legend_property_->getBool() : true;
+  settings.merge_right_legend_with_left = merge_right_legend_with_left_property_ ?
+    merge_right_legend_with_left_property_->getBool() : false;
+  settings.show_right_latest_values = show_right_latest_values_property_ ?
+    show_right_latest_values_property_->getBool() : true;
+  settings.right_legend_position = right_legend_position_property_ ?
+    legendPositionFromName(right_legend_position_property_->getStdString()) :
+    LegendPosition::TopRight;
+  settings.right_legend_x_offset = right_legend_x_offset_property_ ?
+    right_legend_x_offset_property_->getInt() : 4;
+  settings.right_legend_y_offset = right_legend_y_offset_property_ ?
+    right_legend_y_offset_property_->getInt() : 4;
   settings.show_major_grid = show_major_grid_property_ ?
     show_major_grid_property_->getBool() : true;
   settings.show_minor_grid = show_minor_grid_property_ ?
@@ -1434,6 +1586,19 @@ PlotRenderSettings Plot2DDisplay::renderSettingsFromConfig_(const Plot2DConfig &
     y_major_tick_count_property_->getInt() : 5;
   settings.minor_grid_divisions = minor_grid_divisions_property_ ?
     minor_grid_divisions_property_->getInt() : 1;
+  return settings;
+}
+
+PlotRenderSettings Plot2DDisplay::renderSettingsForSurface_(const Plot2DConfig & config) const
+{
+  PlotRenderSettings settings = renderSettingsFromConfig_(config);
+  if (config.display_surface != DisplaySurface::Panel) {
+    return settings;
+  }
+
+  const QSize panel_size = panelRenderSize_();
+  settings.width = std::max(panel_size.width(), 120);
+  settings.height = std::max(panel_size.height(), 80);
   return settings;
 }
 
@@ -1458,6 +1623,9 @@ std::vector<RenderableSeries> Plot2DDisplay::renderableSeriesFromSnapshot_(
       if (series.label.empty()) {
         series.label = "Series";
       }
+      series.field_name = snapshot.config.plot_mode == PlotMode::XY ?
+        snapshot.config.series[i].y_field : snapshot.config.series[i].field;
+      series.axis = snapshot.config.series[i].axis;
       series.unit = snapshot.config.series[i].unit;
       series.color = toQColor(snapshot.config.series[i].color);
       series.color.setAlphaF(snapshot.config.series[i].line_alpha);
@@ -1527,6 +1695,54 @@ void Plot2DDisplay::initializeOverlayBackend_()
   overlay_backend_->setVisible(false);
 }
 
+void Plot2DDisplay::initializePanelWidget_()
+{
+  if (panel_widget_) {
+    return;
+  }
+
+  panel_widget_ = new PlotImagePanelWidget();
+  panel_widget_->setWindowTitle(getName());
+}
+
+void Plot2DDisplay::synchronizePresentationMode_(const Plot2DConfig & config)
+{
+  const bool panel_mode = config.display_surface == DisplaySurface::Panel;
+  if (panel_mode) {
+    initializePanelWidget_();
+    if (panel_widget_) {
+      panel_widget_->setWindowTitle(getName());
+    }
+    if (overlay_backend_) {
+      overlay_backend_->setVisible(false);
+    }
+    if (isEnabled() && panel_widget_ && !panel_widget_registered_) {
+      setAssociatedWidget(panel_widget_);
+      panel_widget_registered_ = true;
+    }
+    if (isEnabled() && panel_widget_registered_ && getAssociatedWidget()) {
+      getAssociatedWidget()->show();
+    }
+    return;
+  }
+
+  if (panel_widget_registered_ && getAssociatedWidget()) {
+    getAssociatedWidget()->hide();
+  }
+  if (overlay_backend_ && isEnabled()) {
+    overlay_backend_->setVisible(isEnabled());
+  }
+}
+
+void Plot2DDisplay::updatePresentationPropertyVisibility_(const Plot2DConfig & config)
+{
+  if (!layout_root_property_) {
+    return;
+  }
+  const bool panel_mode = config.display_surface == DisplaySurface::Panel;
+  layout_root_property_->setHidden(panel_mode);
+}
+
 void Plot2DDisplay::updateOverlayGeometry_()
 {
   updateOverlayGeometry_(configFromProperties_());
@@ -1558,13 +1774,38 @@ void Plot2DDisplay::updateOverlayGeometry_(const Plot2DConfig & config)
   }
 }
 
+QSize Plot2DDisplay::panelRenderSize_() const
+{
+  if (panel_widget_) {
+    return panel_widget_->renderSize();
+  }
+  return QSize(
+    width_property_ ? width_property_->getInt() : 360,
+    height_property_ ? height_property_->getInt() : 220);
+}
+
 void Plot2DDisplay::renderOverlay_(const bool request_rviz_render)
 {
+  const RenderSnapshot snapshot = renderSnapshot_();
+  synchronizePresentationMode_(snapshot.config);
+
+  const PlotRenderSettings settings = renderSettingsForSurface_(snapshot.config);
+  const QImage rendered = renderer_.render(
+    settings,
+    renderableSeriesFromSnapshot_(snapshot),
+    renderableReferencesFromConfig_(snapshot.config));
+
+  if (snapshot.config.display_surface == DisplaySurface::Panel) {
+    if (panel_widget_ && panel_widget_registered_) {
+      panel_widget_->setImage(rendered);
+    }
+    return;
+  }
+
   if (!overlay_backend_) {
     return;
   }
 
-  const RenderSnapshot snapshot = renderSnapshot_();
   updateOverlayGeometry_(snapshot.config);
   if (isEnabled()) {
     overlay_backend_->setVisible(true);
@@ -1572,12 +1813,6 @@ void Plot2DDisplay::renderOverlay_(const bool request_rviz_render)
   if (!overlay_backend_->isReady()) {
     return;
   }
-
-  const PlotRenderSettings settings = renderSettingsFromConfig_(snapshot.config);
-  const QImage rendered = renderer_.render(
-    settings,
-    renderableSeriesFromSnapshot_(snapshot),
-    renderableReferencesFromConfig_(snapshot.config));
 
   const OverlayBackendResult image_result = overlay_backend_->updateImage(rendered);
   if (!image_result.ok()) {
